@@ -1,9 +1,12 @@
 Verilen kararlar (Proje bittiği zaman görsel kısımlar az olursa, verdiğimiz kararları neye göre verdiğimizi görselleştirip ekleyebilelim diye):
+=======================================================================================================================================
 
 Eksik verilerin türleri neler ?
 1️⃣ MCAR → Tamamen rastgele
 2️⃣ MAR → Diğer değişkenlere bağlı
 3️⃣ MNAR → Kendi değerine bağlı
+
+=======================================================================================================================================
 
 Outlier silmeye gerek var mı ?
 Her iki grup için de silmiyoruz. Gerekçeleri farklı:
@@ -12,3 +15,20 @@ Grup 2 için: Oranlar zaten %2-2.5 seviyesinde. Bu kadar az veriyi silmek modeli
 Bunun yerine ne yapacağız?
 Outlier'ları RobustScaler ile etkisizleştireceğiz. RobustScaler, ölçeklendirme yaparken mean ve std yerine medyan ve IQR kullanır.
 Yani aykırı değerler ölçeklendirmeyi bozmaz, veriyi kaybetmeyiz, model de yanılmaz. Bu kararı Adım 1.4'te scaling pipeline'ına yansıtacağız.
+
+=======================================================================================================================================
+
+Neden Scaling Yapıyoruz ?
+Ham veride kolonların değer aralıkları birbirinden çok farklı;
+solids: 320 - 61.227
+turbidity: 1.45 - 6.74
+ph: 0 - 14
+
+Hangi Scaler'ı Kullanacağız?
+Adım 1.3'te outlier kararını vermiştik. O karar buraya doğrudan yansıyor:
+StandardScaler → Mean ve std kullanır. Outlier'lardan etkilenir. Bizim için uygun değil.
+MinMaxScaler → Min ve max kullanır. Outlier'lara karşı daha da hassas. Uygun değil.
+RobustScaler → Medyan ve IQR kullanır. Outlier'lardan etkilenmez. Bizim için doğru seçim.
+Bununla birlikte kullanıcıya Sekme 2'de seçim hakkı vereceğiz. Varsayılan RobustScaler olacak ama StandardScaler ve MinMaxScaler da seçilebilecek.
+
+=======================================================================================================================================
