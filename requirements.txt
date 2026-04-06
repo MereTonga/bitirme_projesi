@@ -1,0 +1,26 @@
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Machine Learning
+scikit-learn
+xgboost
+imbalanced-learn
+
+# Deep Learning
+torch
+
+# Data
+pandas
+numpy
+
+# Visualization
+plotly
+
+# Frontend
+streamlit
+requests
+
+# Serialization
+joblib
