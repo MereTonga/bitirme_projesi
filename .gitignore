@@ -1,0 +1,24 @@
+# Veri seti
+data/
+
+# Eğitilen modeller
+backend/garage/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ortam dosyaları
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+
+# Log dosyaları
+*.log
