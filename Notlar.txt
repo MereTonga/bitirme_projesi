@@ -1,0 +1,14 @@
+Verilen kararlar (Proje bittiği zaman görsel kısımlar az olursa, verdiğimiz kararları neye göre verdiğimizi görselleştirip ekleyebilelim diye):
+
+Eksik verilerin türleri neler ?
+1️⃣ MCAR → Tamamen rastgele
+2️⃣ MAR → Diğer değişkenlere bağlı
+3️⃣ MNAR → Kendi değerine bağlı
+
+Outlier silmeye gerek var mı ?
+Her iki grup için de silmiyoruz. Gerekçeleri farklı:
+Grup 1 için: Silmek modeli körleştirir. Extreme pH = kirli su ilişkisini öğrenemez.
+Grup 2 için: Oranlar zaten %2-2.5 seviyesinde. Bu kadar az veriyi silmek modeli anlamlı iyileştirmez, sadece veri kaybetmiş oluruz.
+Bunun yerine ne yapacağız?
+Outlier'ları RobustScaler ile etkisizleştireceğiz. RobustScaler, ölçeklendirme yaparken mean ve std yerine medyan ve IQR kullanır.
+Yani aykırı değerler ölçeklendirmeyi bozmaz, veriyi kaybetmeyiz, model de yanılmaz. Bu kararı Adım 1.4'te scaling pipeline'ına yansıtacağız.
