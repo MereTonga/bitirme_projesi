@@ -32,3 +32,28 @@ RobustScaler → Medyan ve IQR kullanır. Outlier'lardan etkilenmez. Bizim için
 Bununla birlikte kullanıcıya Sekme 2'de seçim hakkı vereceğiz. Varsayılan RobustScaler olacak ama StandardScaler ve MinMaxScaler da seçilebilecek.
 
 =======================================================================================================================================
+
+Neden Sınıf Dengesizliği Bir Sorun?
+Model bu dengesizliği görünce en kolay yolu seçer: her şeye "içilemez" de, %61 accuracy al.
+Hiçbir şey öğrenmeden yüksek accuracy elde etmiş olur. Buna "aptal sınıflandırıcı problemi" denir.
+
+İki Farklı Yaklaşım
+Class Weight → Modele "azınlık sınıfına daha fazla dikkat et" diyorsun. Veriyi değiştirmiyorsun, sadece kayıp fonksiyonundaki ağırlıkları ayarlıyorsun. Hızlı ve risksiz.
+SMOTE (Synthetic Minority Oversampling Technique) → Azınlık sınıfından yapay yeni örnekler üretir. Mevcut içilebilir su örneklerinin arasına interpolasyon yaparak yeni sentetik örnekler ekler.
+Veri setini dengeler ama eğitimde dikkatli kullanmak gerekir.
+
+Kritik Kural: SMOTE Sadece Train Setine Uygulanır
+Bu çok önemli. SMOTE'u tüm veriye uygularsan test setine sentetik veri sızar ve modelinin performansı gerçekten olduğundan iyi görünür.
+Bu büyük bir hata. Doğru sıra şöyle:
+Ham Veri
+    │
+    ▼
+Train / Test Split   ← Önce böl
+    │
+    ▼
+Sadece Train'e SMOTE  ← Sonra dengele
+    │
+    ▼
+Model Eğitimi
+
+=======================================================================================================================================
