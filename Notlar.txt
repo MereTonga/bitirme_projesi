@@ -56,6 +56,24 @@ Sadece Train'e SMOTE  ← Sonra dengele
     ▼
 Model Eğitimi
 
-=======================================================================================================================================ü
+=======================================================================================================================================
 
-Faz 1 test muhabbetini .py olarak kaydet sonra githuba pushla
+Makine Öğrenmesi:
+1. Logistic Regression
+2. Naive Bayes
+3. KNN
+4. Decision Tree
+5. Random Forest
+6. Gradient Boosting
+7. XGBoost
+8. LightGBM
+9. AdaBoost
+10. SVM
+
+Derin Öğrenme:
+11. ANN (Pytorch)
+
+Model Seçiminde neden Extra Tress ve CatBoost eklemedik?
+Extra Trees → Random Forest'a çok benziyor, karşılaştırma için ilginç olabilir ama Random Forest zaten bu işi yapıyor. Eklemiyoruz.
+CatBoost → XGBoost ve LightGBM ile birlikte "boosting üçlüsü" tamamlanmış olur. Kategorik değişkenler için güçlü ama bu veri setinde tüm değişkenler sayısal, ekstra avantajı yok. Eklemiyoruz.
+Voting / Stacking Ensemble → Birden fazla modeli birleştiren meta-model. Güzel bir ek olur ama kompleksliği ciddi artırır. Şimdilik eklemiyoruz, ilerleyen adımlarda konuşabiliriz.
