@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
 
+import numpy as np
 import lightgbm as lgb
 from ml.base_model import BaseModel
 
@@ -21,19 +22,19 @@ class LightGBMModel(BaseModel):
         self,
         X_train,
         y_train,
-        n_estimators   = 100,
-        learning_rate  = 0.1,
-        max_depth      = -1,
-        num_leaves     = 31,
-        is_unbalance   = False,
-        random_state   = 42
+        n_estimators  = 100,
+        learning_rate = 0.1,
+        max_depth     = -1,
+        num_leaves    = 31,
+        is_unbalance  = False,
+        random_state  = 42
     ):
         """
         Parametreler:
             n_estimators  : Ağaç sayısı
             learning_rate : Adım büyüklüğü
             max_depth     : Maksimum derinlik (-1 = sınırsız)
-            num_leaves    : Yaprak sayısı (derinlikten bağımsız)
+            num_leaves    : Yaprak sayısı
             is_unbalance  : Sınıf dengesizliği otomatik yönetimi
             random_state  : Tekrar üretilebilirlik
         """
@@ -44,6 +45,10 @@ class LightGBMModel(BaseModel):
             'num_leaves'   : num_leaves,
             'is_unbalance' : is_unbalance
         }
+
+        # Numpy array garantisi — feature name uyarısını önler
+        if hasattr(X_train, 'values'):
+            X_train = X_train.values
 
         self.model = lgb.LGBMClassifier(
             n_estimators  = n_estimators,
