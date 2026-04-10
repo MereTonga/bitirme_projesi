@@ -77,3 +77,16 @@ Model Seçiminde neden Extra Tress ve CatBoost eklemedik?
 Extra Trees → Random Forest'a çok benziyor, karşılaştırma için ilginç olabilir ama Random Forest zaten bu işi yapıyor. Eklemiyoruz.
 CatBoost → XGBoost ve LightGBM ile birlikte "boosting üçlüsü" tamamlanmış olur. Kategorik değişkenler için güçlü ama bu veri setinde tüm değişkenler sayısal, ekstra avantajı yok. Eklemiyoruz.
 Voting / Stacking Ensemble → Birden fazla modeli birleştiren meta-model. Güzel bir ek olur ama kompleksliği ciddi artırır. Şimdilik eklemiyoruz, ilerleyen adımlarda konuşabiliriz.
+
+=======================================================================================================================================
+
+Neden Dataset ve DataLoader Yazıyoruz?
+PyTorch'ta veriyi modele doğrudan numpy array olarak vermiyoruz. Bunun yerine iki yapı kullanıyoruz:
+Dataset → Veriyi sarmalayan kap. "Kaçıncı örneği ver?" sorusuna cevap verir.
+DataLoader → Dataset'i batch'lere böler ve karıştırır. Yani 3196 örneği 32'lik gruplar halinde modele sunar.
+Bu hem bellek yönetimi hem de eğitim kalitesi açısından kritik.
+
+Neden batch'ler? Tüm veriyi bir anda modele vermek yerine küçük gruplarla çalışmak:
+GPU belleğini verimli kullanır
+Her batch sonrası ağırlıkları günceller — daha stabil eğitim
+RTX 5060 Ti için bu farkı göreceksin
