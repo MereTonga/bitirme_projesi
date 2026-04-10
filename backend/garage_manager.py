@@ -12,8 +12,15 @@ GARAGE_YOLU = os.path.join(
     'garage'
 )
 
-# Garage'a kaydedilmeyecek sistem dosyaları
-SISTEM_DOSYALARI = {'preprocessing_pipeline.pkl'}
+SISTEM_DOSYALARI = {
+    'preprocessing_pipeline.pkl'
+}
+
+OZELLIK_KOLONLARI = [
+    'ph', 'Hardness', 'Solids', 'Chloramines',
+    'Sulfate', 'Conductivity', 'Organic_carbon',
+    'Trihalomethanes', 'Turbidity'
+]
 
 
 # ─────────────────────────────────────────
@@ -23,59 +30,44 @@ SISTEM_DOSYALARI = {'preprocessing_pipeline.pkl'}
 def benzersiz_isim_uret(model_adi, hiperparametreler):
     """
     Model adı ve hiperparametrelerden benzersiz
-    bir dosya adı üretir.
-
-    Örnek:
-        knn + {n_neighbors:3, metric:'minkowski'}
-        → knn_n3_minkowski_20250615_143022
-
-    Parametreler:
-        model_adi        : 'knn', 'random_forest' vb.
-        hiperparametreler: dict
-
-    Döndürür:
-        dosya_adi: benzersiz string (uzantısız)
+    dosya adı üretir.
     """
     zaman_damgasi = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-    # Hiperparametrelerden kısa etiket üret
+    kisaltmalar = {
+        'n_neighbors'      : 'k',
+        'n_estimators'     : 'n',
+        'max_depth'        : 'd',
+        'learning_rate'    : 'lr',
+        'C'                : 'C',
+        'kernel'           : '',
+        'metric'           : '',
+        'num_leaves'       : 'nl',
+        'var_smoothing'    : 'vs',
+        'subsample'        : 'sub',
+        'class_weight'     : 'cw',
+        'is_unbalance'     : 'ub',
+        'min_samples_split': 'mss',
+        'min_samples_leaf' : 'msl',
+        'colsample_bytree' : 'cbt',
+        'scale_pos_weight' : 'spw'
+    }
     etiketler = []
     for anahtar, deger in hiperparametreler.items():
         if deger is None:
             continue
-        # Uzun anahtar isimlerini kısalt
-        kisaltmalar = {
-            'n_neighbors'     : 'k',
-            'n_estimators'    : 'n',
-            'max_depth'       : 'd',
-            'learning_rate'   : 'lr',
-            'C'               : 'C',
-            'kernel'          : '',
-            'metric'          : '',
-            'num_leaves'      : 'nl',
-            'var_smoothing'   : 'vs',
-            'subsample'       : 'sub',
-            'class_weight'    : 'cw',
-            'is_unbalance'    : 'ub',
-            'min_samples_split': 'mss',
-            'min_samples_leaf' : 'msl',
-            'colsample_bytree' : 'cbt',
-            'scale_pos_weight' : 'spw'
-        }
-        kisaltma = kisaltmalar.get(anahtar, anahtar[:3])
+        kisaltma  = kisaltmalar.get(anahtar, anahtar[:3])
         deger_str = str(deger).replace('.', 'p').replace(' ', '')
         if kisaltma:
             etiketler.append(f"{kisaltma}{deger_str}")
         else:
             etiketler.append(deger_str)
 
-    etiket = '_'.join(etiketler[:3])  # En fazla 3 parametre
-    dosya_adi = f"{model_adi}_{etiket}_{zaman_damgasi}"
-    return dosya_adi
+    etiket    = '_'.join(etiketler[:3])
+    return f"{model_adi}_{etiket}_{zaman_damgasi}"
 
 
 # ─────────────────────────────────────────
-# 2. MODEL KAYDET
+# 2. ML MODEL KAYDET
 # ─────────────────────────────────────────
 
 def model_kaydet(
@@ -84,34 +76,19 @@ def model_kaydet(
     hiperparametreler,
     egitim_suresi,
     metrikler,
-    model_turu   = 'ml',
-    ozel_isim    = None
+    model_turu  = 'ml',
+    ozel_isim   = None
 ):
     """
-    Modeli metadata ile birlikte garage'a kaydeder.
-
-    Parametreler:
-        model_objesi      : sklearn veya PyTorch model
-        model_adi         : 'knn', 'random_forest', 'ann' vb.
-        hiperparametreler : dict
-        egitim_suresi     : float (saniye)
-        metrikler         : {'accuracy', 'f1', 'roc_auc', ...}
-        model_turu        : 'ml' veya 'dl'
-        ozel_isim         : Kullanıcının verdiği özel isim (opsiyonel)
+    ML modelini metadata ile birlikte garage'a kaydeder.
 
     Döndürür:
-        {
-            'dosya_adi'  : str,
-            'tam_yol'    : str,
-            'goruntu_adi': str
-        }
+        {'dosya_adi', 'tam_yol', 'goruntu_adi'}
     """
     os.makedirs(GARAGE_YOLU, exist_ok=True)
 
-    dosya_adi  = benzersiz_isim_uret(model_adi, hiperparametreler)
-    uzanti     = '.pth' if model_turu == 'dl' else '.pkl'
-    tam_yol    = os.path.join(GARAGE_YOLU, dosya_adi + uzanti)
-
+    dosya_adi   = benzersiz_isim_uret(model_adi, hiperparametreler)
+    tam_yol     = os.path.join(GARAGE_YOLU, dosya_adi + '.pkl')
     goruntu_adi = ozel_isim or dosya_adi
 
     metadata = {
@@ -127,59 +104,48 @@ def model_kaydet(
 
     joblib.dump(metadata, tam_yol)
     return {
-        'dosya_adi'  : dosya_adi + uzanti,
+        'dosya_adi'  : dosya_adi + '.pkl',
         'tam_yol'    : tam_yol,
         'goruntu_adi': goruntu_adi
     }
 
 
 # ─────────────────────────────────────────
-# 3. GARAGE LİSTELE
+# 3. GARAGE LİSTELE — ML + DL
 # ─────────────────────────────────────────
 
 def garage_listele(model_turu=None):
     """
-    Garage'daki modelleri listeler.
+    Garage'daki tüm modelleri listeler.
+    ML ve DL modellerini birlikte gösterir.
 
     Parametreler:
         model_turu: 'ml', 'dl' veya None (hepsi)
 
     Döndürür:
-        liste: [
-            {
-                'dosya_adi'        : str,
-                'goruntu_adi'      : str,
-                'model_adi'        : str,
-                'model_turu'       : str,
-                'kayit_zamani'     : str,
-                'egitim_suresi'    : float,
-                'accuracy'         : float,
-                'f1'               : float,
-                'roc_auc'          : float,
-                'boyut_kb'         : float
-            }
-        ]
+        liste: kayıt zamanına göre azalan sıralı
     """
     if not os.path.exists(GARAGE_YOLU):
         return []
 
     liste = []
     for dosya in os.listdir(GARAGE_YOLU):
+        # Sistem dosyalarını ve json'ları atla
         if dosya in SISTEM_DOSYALARI:
             continue
-        if not (dosya.endswith('.pkl') or dosya.endswith('.pth')):
+        if not dosya.endswith('.pkl'):
             continue
 
         tam_yol = os.path.join(GARAGE_YOLU, dosya)
         try:
-            meta = joblib.load(tam_yol)
+            meta  = joblib.load(tam_yol)
+            tur   = meta.get('model_turu', '')
 
-            # Eski format uyumluluğu
-            if 'model_turu' not in meta:
+            if not tur:
                 continue
 
             # Tür filtresi
-            if model_turu and meta.get('model_turu') != model_turu:
+            if model_turu and tur != model_turu:
                 continue
 
             boyut = os.path.getsize(tam_yol) / 1024
@@ -187,7 +153,7 @@ def garage_listele(model_turu=None):
                 'dosya_adi'    : dosya,
                 'goruntu_adi'  : meta.get('goruntu_adi', dosya),
                 'model_adi'    : meta.get('model_adi', ''),
-                'model_turu'   : meta.get('model_turu', ''),
+                'model_turu'   : tur,
                 'kayit_zamani' : meta.get('kayit_zamani', ''),
                 'egitim_suresi': meta.get('egitim_suresi', 0),
                 'accuracy'     : meta.get('metrikler', {}).get('accuracy', 0),
@@ -199,7 +165,11 @@ def garage_listele(model_turu=None):
         except Exception:
             continue
 
-    return sorted(liste, key=lambda x: x['kayit_zamani'], reverse=True)
+    return sorted(
+        liste,
+        key=lambda x: x['kayit_zamani'],
+        reverse=True
+    )
 
 
 # ─────────────────────────────────────────
@@ -208,15 +178,32 @@ def garage_listele(model_turu=None):
 
 def model_yukle(dosya_adi):
     """
-    Garage'dan dosya adına göre model yükler.
+    Garage'dan ML model dosyasını yükler.
 
     Döndürür:
-        metadata dict (model objesi dahil)
+        metadata dict
     """
     tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
     if not os.path.exists(tam_yol):
         raise FileNotFoundError(f"Model bulunamadı: {tam_yol}")
     return joblib.load(tam_yol)
+
+
+def ann_yukle_ve_tahmin(dosya_adi, X):
+    """
+    ANN modelini garage'dan yükler ve tahmin yapar.
+    Streamlit /predict için wrapper.
+
+    Parametreler:
+        dosya_adi : Garage'daki .pkl dosya adı
+        X         : numpy array (n_ornek, 9)
+
+    Döndürür:
+        {'sinif': list, 'olasilik': list}
+    """
+    from dl.dl_garage import ann_yukle, ann_tahmin
+    model, _ = ann_yukle(dosya_adi)
+    return ann_tahmin(model, X)
 
 
 # ─────────────────────────────────────────
@@ -225,8 +212,7 @@ def model_yukle(dosya_adi):
 
 def model_sil(dosya_adi):
     """
-    Garage'dan bir modeli siler.
-    Sistem dosyalarını silmeye çalışırsa hata verir.
+    Garage'dan model ve varsa eğitim geçmişini siler.
 
     Döndürür:
         True: Başarıyla silindi
@@ -238,9 +224,18 @@ def model_sil(dosya_adi):
 
     tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
     if not os.path.exists(tam_yol):
-        raise FileNotFoundError(f"Dosya bulunamadı: {tam_yol}")
+        raise FileNotFoundError(
+            f"Dosya bulunamadı: {tam_yol}"
+        )
 
     os.remove(tam_yol)
+
+    # DL ise eğitim geçmişini de sil
+    gecmis_adi = dosya_adi.replace('.pkl', '_gecmis.json')
+    gecmis_yol = os.path.join(GARAGE_YOLU, gecmis_adi)
+    if os.path.exists(gecmis_yol):
+        os.remove(gecmis_yol)
+
     return True
 
 
@@ -252,8 +247,7 @@ def karsilastirma_tablosu(model_turu=None):
     """
     Garage'daki modellerin metriklerini
     karşılaştırma tablosu olarak döndürür.
-
-    Streamlit Sekme 5 için kullanılır.
+    ML ve DL birlikte gösterilebilir.
 
     Döndürür:
         DataFrame: ROC-AUC'ye göre sıralı
@@ -272,7 +266,9 @@ def karsilastirma_tablosu(model_turu=None):
         'Accuracy', 'F1', 'ROC-AUC',
         'Eğitim Süresi', 'Kayıt Zamanı', 'Dosya'
     ]
-    return df.sort_values('ROC-AUC', ascending=False).reset_index(drop=True)
+    return df.sort_values(
+        'ROC-AUC', ascending=False
+    ).reset_index(drop=True)
 
 
 # ─────────────────────────────────────────
@@ -282,82 +278,130 @@ def karsilastirma_tablosu(model_turu=None):
 if __name__ == "__main__":
     from data_loader      import veri_yukle
     from pipeline_builder import veri_hazirla
+    from dl.dl_garage     import ann_kaydet, dl_garage_listele
+    from dl.trainer       import model_egit
     from ml.rf_model      import RandomForestModel
-    from ml.knn_model     import KNNModel
+    from ml.evaluator     import model_degerlendir
+    import time
 
     df = veri_yukle()
-    X_train, X_test, y_train, y_test, pipe, _, _ = veri_hazirla(
-        df, dengesizlik='smote'
+    X_train, X_test, y_train, y_test, pipe, _, pw = veri_hazirla(
+        df, dengesizlik='class_weight'
     )
 
-    # ── Test 1: İki farklı KNN versiyonu kaydet ──
-    print("=" * 60)
-    print("TEST 1: Aynı modelin farklı versiyonları")
-    print("=" * 60)
+    val_boyut = int(len(X_train) * 0.2)
+    X_val     = X_train[:val_boyut]
+    y_val     = y_train[:val_boyut]
+    X_tr      = X_train[val_boyut:]
+    y_tr      = y_train[val_boyut:]
 
-    for k in [3, 7]:
-        knn = KNNModel()
-        knn.egit(X_train, y_train, n_neighbors=k)
-        metrikler = knn.degerlendir(X_test, y_test)
-        sonuc = model_kaydet(
-            model_objesi      = knn.model,
-            model_adi         = knn.model_adi,
-            hiperparametreler = knn.hiperparametreler,
-            egitim_suresi     = knn.egitim_suresi,
-            metrikler         = metrikler,
-            model_turu        = 'ml'
-        )
-        print(f"  Kaydedildi: {sonuc['dosya_adi']}")
-
-    # ── Test 2: Random Forest kaydet ──
-    print()
+    # ── ML Model Kaydet ─────────────────────────────
+    print("=" * 55)
+    print("TEST 1: ML Model Kaydı")
+    print("=" * 55)
     rf = RandomForestModel()
-    rf.egit(X_train, y_train, n_estimators=100)
-    metrikler_rf = rf.degerlendir(X_test, y_test)
-    sonuc_rf = model_kaydet(
+    rf.egit(X_train, y_train, n_estimators=50)
+    rf_metrikleri = model_degerlendir(rf, X_test, y_test)
+    ml_sonuc = model_kaydet(
         model_objesi      = rf.model,
         model_adi         = rf.model_adi,
         hiperparametreler = rf.hiperparametreler,
         egitim_suresi     = rf.egitim_suresi,
-        metrikler         = metrikler_rf,
+        metrikler         = rf_metrikleri,
         model_turu        = 'ml',
-        ozel_isim         = 'RandomForest_100agac'
+        ozel_isim         = 'RF_entegrasyon_test'
     )
-    print(f"  Kaydedildi: {sonuc_rf['dosya_adi']}")
+    print(f"  ML kaydedildi : {ml_sonuc['dosya_adi']}")
 
-    # ── Test 3: Listele ──
+    # ── ANN Model Kaydet ────────────────────────────
     print()
-    print("=" * 60)
-    print("TEST 2: Garage Listesi")
-    print("=" * 60)
-    liste = garage_listele(model_turu='ml')
+    print("=" * 55)
+    print("TEST 2: ANN Model Kaydı")
+    print("=" * 55)
+    bas = time.time()
+    ann_model, gecmis, device = model_egit(
+        X_tr, y_tr,
+        X_val           = X_val,
+        y_val           = y_val,
+        gizli_katmanlar = [64, 32],
+        learning_rate   = 0.001,
+        epochs          = 30,
+        batch_size      = 32,
+        pos_weight      = pw,
+        early_stopping  = True,
+        patience        = 10
+    )
+    sure = round(time.time() - bas, 2)
+
+    from dl.dl_garage import ann_tahmin
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+    import numpy as np
+    tahmin_sonuc = ann_tahmin(ann_model, X_test, device)
+    y_pred       = np.array(tahmin_sonuc['sinif'])
+    y_prob       = np.array(tahmin_sonuc['olasilik'])
+    ann_metrikleri = {
+        'accuracy': round(accuracy_score(y_test, y_pred), 4),
+        'f1'      : round(f1_score(y_test, y_pred, zero_division=0), 4),
+        'roc_auc' : round(roc_auc_score(y_test, y_prob), 4)
+    }
+
+    dl_sonuc = ann_kaydet(
+        model             = ann_model,
+        gecmis            = gecmis,
+        metrikler         = ann_metrikleri,
+        hiperparametreler = {
+            'gizli_katmanlar': [64, 32],
+            'learning_rate'  : 0.001,
+            'epochs'         : 30
+        },
+        egitim_suresi = sure,
+        ozel_isim     = 'ANN_entegrasyon_test'
+    )
+    print(f"  ANN kaydedildi: {dl_sonuc['dosya_adi']}")
+
+    # ── Birleşik Liste ──────────────────────────────
+    print()
+    print("=" * 55)
+    print("TEST 3: Birleşik Garage Listesi (ML + DL)")
+    print("=" * 55)
+    liste = garage_listele()
     for item in liste:
         print(
-            f"  {item['goruntu_adi']:<35} "
-            f"ROC-AUC: {item['roc_auc']} | "
-            f"{item['kayit_zamani']}"
+            f"  [{item['model_turu'].upper():<2}] "
+            f"{item['goruntu_adi']:<30} "
+            f"ROC-AUC: {item['roc_auc']}"
         )
 
-    # ── Test 4: Karşılaştırma tablosu ──
+    # ── Karşılaştırma Tablosu ───────────────────────
     print()
-    print("=" * 60)
-    print("TEST 3: Karşılaştırma Tablosu")
-    print("=" * 60)
-    tablo = karsilastirma_tablosu(model_turu='ml')
+    print("=" * 55)
+    print("TEST 4: Karşılaştırma Tablosu")
+    print("=" * 55)
+    tablo = karsilastirma_tablosu()
     if not tablo.empty:
-        print(tablo[['İsim', 'Accuracy', 'F1', 'ROC-AUC']].to_string(index=False))
+        print(tablo[
+            ['İsim', 'Tür', 'Accuracy', 'F1', 'ROC-AUC']
+        ].head(10).to_string(index=False))
 
-    # ── Test 5: Yükle ve sil ──
+    # ── ANN Wrapper Testi ───────────────────────────
     print()
-    print("=" * 60)
-    print("TEST 4: Yükle ve Sil")
-    print("=" * 60)
-    ilk_dosya = liste[0]['dosya_adi']
-    meta      = model_yukle(ilk_dosya)
-    print(f"  Yüklendi  : {meta['model_adi']} | ROC-AUC: {meta['metrikler']['roc_auc']}")
-    model_sil(ilk_dosya)
-    print(f"  Silindi   : {ilk_dosya}")
-    print(f"  Kalan ML  : {len(garage_listele(model_turu='ml'))} model")
+    print("=" * 55)
+    print("TEST 5: ANN Wrapper Testi")
+    print("=" * 55)
+    sonuc = ann_yukle_ve_tahmin(dl_sonuc['dosya_adi'], X_test[:3])
+    print(f"  İlk 3 tahmin  : {sonuc['sinif']}")
+    print(f"  İlk 3 olasılık: {[round(p,3) for p in sonuc['olasilik']]}")
+
+    # ── Sil Testi ───────────────────────────────────
+    print()
+    print("=" * 55)
+    print("TEST 6: Sil Testi")
+    print("=" * 55)
+    model_sil(ml_sonuc['dosya_adi'])
+    model_sil(dl_sonuc['dosya_adi'])
+    print(f"  ML silindi  : {ml_sonuc['dosya_adi']}")
+    print(f"  DL silindi  : {dl_sonuc['dosya_adi']}")
+    print(f"  Kalan model : {len(garage_listele())} adet")
 
     print()
     print("Tüm testler başarılı.")
