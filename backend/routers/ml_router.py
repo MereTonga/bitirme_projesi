@@ -58,6 +58,8 @@ def ml_egit_ve_degerlendir(model_obj, istek, hiperparametreler):
             knn_k          = istek.preprocessing.knn_k,
             test_oran      = istek.preprocessing.test_oran
         )
+        # Pipeline'ı kaydet - /predict için kritik
+        _pipeline_kaydet(pipe)
     except Exception as e:
         raise HTTPException(
             status_code = 500,
