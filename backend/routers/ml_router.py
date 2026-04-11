@@ -17,6 +17,9 @@ from ml.evaluator     import model_degerlendir
 from garage_manager   import model_kaydet
 from cache            import hiper_hash, cache_kontrol, cache_kaydet
 
+# Pipeline'ı otomatik kaydet — /predict için gerekli
+from pipeline_builder import pipeline_kaydet as _pipeline_kaydet
+
 router = APIRouter()
 
 

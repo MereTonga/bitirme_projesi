@@ -13,8 +13,8 @@ from balancer import veri_bol, smote_uygula, class_weight_hesapla
 
 # Pipeline kayıt klasörü
 GARAGE_YOLU = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'backend', 'garage'
+    os.path.dirname(os.path.abspath(__file__)),
+    'garage'
 )
 
 # Özellik kolonları
