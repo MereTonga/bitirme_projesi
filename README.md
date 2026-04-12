@@ -6,6 +6,7 @@ interaktif bir makine öğrenmesi ve derin öğrenme uygulaması.
 ## Teknolojiler
 - **Frontend:** Streamlit
 - **Backend:** FastAPI
+- **Database:** SQLite
 - **ML:** Scikit-learn, XGBoost
 - **DL:** PyTorch
 - **Deployment:** Docker
