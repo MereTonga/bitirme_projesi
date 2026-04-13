@@ -24,4 +24,4 @@ streamlit
 requests
 
 # Serialization
-joblib
+joblibshap
