@@ -109,3 +109,61 @@ def model_sil(dosya_adi: str) -> dict:
 
 def tahmin_yap(payload: dict) -> dict:
     return _post('/predict', payload)
+
+
+# ─────────────────────────────────────────
+# VERİTABANI SORGULARI
+# ─────────────────────────────────────────
+
+def db_modelleri_getir(
+    model_turu  = None,
+    model_adi   = None,
+    min_roc_auc = None,
+    limit       = None
+) -> list:
+    params = {}
+    if model_turu  : params['model_turu']   = model_turu
+    if model_adi   : params['model_adi']    = model_adi
+    if min_roc_auc : params['min_roc_auc']  = min_roc_auc
+    if limit       : params['limit']        = limit
+    sonuc = _get('/db/modeller', params=params)
+    return sonuc if isinstance(sonuc, list) else []
+
+
+def db_tahminleri_getir(
+    model_id = None,
+    sinif    = None,
+    limit    = 50
+) -> list:
+    params = {'limit': limit}
+    if model_id is not None: params['model_id'] = model_id
+    if sinif    is not None: params['sinif']     = sinif
+    sonuc = _get('/db/tahminler', params=params)
+    return sonuc if isinstance(sonuc, list) else []
+
+
+def db_tahmin_istatistik(model_id=None) -> dict:
+    params = {'model_id': model_id} if model_id else None
+    return _get('/db/tahmin-istatistik', params=params)
+
+
+def db_gunluk_dagilim(gun_sayisi=7) -> list:
+    sonuc = _get('/db/gunluk-dagilim', params={'gun_sayisi': gun_sayisi})
+    return sonuc if isinstance(sonuc, list) else []
+
+
+def db_model_istatistik() -> dict:
+    return _get('/db/model-istatistik')
+
+
+def model_notu_guncelle_api(dosya_adi: str, not_metni: str) -> dict:
+    try:
+        r = requests.put(
+            f'{API_URL}/db/modeller/{dosya_adi}/not',
+            params  = {'not_metni': not_metni},
+            timeout = 10
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {'hata': str(e)}

@@ -303,3 +303,98 @@ def tahmin_yap(istek: TahminIstek):
         goruntu_adi = goruntu_adi,
         esik        = istek.esik
     )
+
+
+# ─────────────────────────────────────────
+# VERİTABANI SORGULAMA ENDPOINTLERİ
+# ─────────────────────────────────────────
+
+@router.get('/db/modeller')
+def db_modelleri_getir(
+    model_turu  : Optional[str]   = None,
+    model_adi   : Optional[str]   = None,
+    min_roc_auc : Optional[float] = None,
+    limit       : Optional[int]   = None
+):
+    """
+    Veritabanından modelleri filtreli getirir.
+
+    Query parametreleri:
+        model_turu  : 'ml' veya 'dl'
+        model_adi   : 'knn', 'random_forest' vb.
+        min_roc_auc : Minimum ROC-AUC eşiği
+        limit       : Maksimum sonuç sayısı
+    """
+    try:
+        from database.models_repo import tum_modelleri_getir
+        return tum_modelleri_getir(
+            model_turu  = model_turu,
+            model_adi   = model_adi,
+            min_roc_auc = min_roc_auc,
+            limit       = limit
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/db/tahminler')
+def db_tahminleri_getir(
+    model_id: Optional[int] = None,
+    sinif   : Optional[int] = None,
+    limit   : int           = 50
+):
+    """Son tahminleri getirir."""
+    try:
+        from database.predictions_repo import tahminleri_getir
+        return tahminleri_getir(
+            model_id = model_id,
+            sinif    = sinif,
+            limit    = limit
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/db/tahmin-istatistik')
+def db_tahmin_istatistik(model_id: Optional[int] = None):
+    """Tahmin istatistiklerini döndürür."""
+    try:
+        from database.predictions_repo import tahmin_istatistikleri
+        return tahmin_istatistikleri(model_id=model_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/db/gunluk-dagilim')
+def db_gunluk_dagilim(gun_sayisi: int = 7):
+    """Son N günün tahmin dağılımını döndürür."""
+    try:
+        from database.predictions_repo import gunluk_tahmin_dagilimi
+        return gunluk_tahmin_dagilimi(gun_sayisi=gun_sayisi)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/db/model-istatistik')
+def db_model_istatistik():
+    """Model tablosu istatistiklerini döndürür."""
+    try:
+        from database.models_repo import model_istatistikleri
+        return model_istatistikleri()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/db/modeller/{dosya_adi}/not')
+def model_notu_guncelle_endpoint(dosya_adi: str, not_metni: str):
+    """Model notunu günceller."""
+    try:
+        from database.models_repo import model_notu_guncelle
+        basarili = model_notu_guncelle(dosya_adi, not_metni)
+        if not basarili:
+            raise HTTPException(status_code=404, detail='Model bulunamadı.')
+        return {'mesaj': 'Not güncellendi.', 'dosya_adi': dosya_adi}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
