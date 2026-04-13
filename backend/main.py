@@ -3,7 +3,7 @@ sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import ml_router, dl_router, predict_router
+from routers import ml_router, dl_router, predict_router, explain_router
 
 
 app = FastAPI(
@@ -60,6 +60,11 @@ app.include_router(
     predict_router.router,
     prefix = '',
     tags   = ['Tahmin & Garaj']
+)
+app.include_router(
+    explain_router.router,
+    prefix = '',
+    tags   = ['SHAP Açıklama']
 )
 
 

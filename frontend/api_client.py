@@ -167,3 +167,33 @@ def model_notu_guncelle_api(dosya_adi: str, not_metni: str) -> dict:
         return r.json()
     except Exception as e:
         return {'hata': str(e)}
+
+
+# ─────────────────────────────────────────
+# SHAP AÇIKLAMA
+# ─────────────────────────────────────────
+
+def tek_ornek_acikla(
+    dosya_adi       : str,
+    model_turu      : str,
+    su_parametreleri: dict,
+    n_background    : int = 100
+) -> dict:
+    return _post('/explain', {
+        'dosya_adi'       : dosya_adi,
+        'model_turu'      : model_turu,
+        'su_parametreleri': su_parametreleri,
+        'n_background'    : n_background
+    })
+
+
+def ozet_acikla(
+    dosya_adi : str,
+    model_turu: str = 'ml',
+    n_ornek   : int = 100
+) -> dict:
+    return _post('/explain/summary', {
+        'dosya_adi' : dosya_adi,
+        'model_turu': model_turu,
+        'n_ornek'   : n_ornek
+    })
