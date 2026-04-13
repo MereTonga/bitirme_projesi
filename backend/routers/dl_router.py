@@ -121,6 +121,7 @@ def ann_egit(istek: ANNIstek):
 
     # ── 6. Garage'a Kaydet ────────────────────────────────────
     try:
+        from database.models_repo import model_kaydet_db, egitim_gecmisi_kaydet_db
         kayit = ann_kaydet(
             model             = model,
             gecmis            = gecmis,
@@ -129,6 +130,27 @@ def ann_egit(istek: ANNIstek):
             egitim_suresi     = sure,
             ozel_isim         = istek.ozel_isim
         )
+        # Veritabanına kaydet
+        pre = istek.preprocessing
+        db_id = model_kaydet_db(
+            dosya_adi         = kayit['dosya_adi'],
+            goruntu_adi       = kayit['goruntu_adi'],
+            model_adi         = 'ann',
+            model_turu        = 'dl',
+            egitim_suresi     = sure,
+            accuracy          = metrikler['accuracy'],
+            f1                = metrikler['f1'],
+            roc_auc           = metrikler['roc_auc'],
+            hiperparametreler = hiperparametreler,
+            imputer_yontem    = pre.imputer_yontem,
+            scaler_yontem     = pre.scaler_yontem,
+            dengesizlik       = pre.dengesizlik,
+            toplam_epoch      = len(gecmis['train_loss']),
+            en_iyi_epoch      = gecmis.get('en_iyi_epoch', 0),
+            erken_durduruldu  = gecmis.get('durduruldu', False)
+        )
+        egitim_gecmisi_kaydet_db(db_id, gecmis)
+
     except Exception as e:
         raise HTTPException(
             status_code = 500,

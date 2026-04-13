@@ -270,6 +270,31 @@ def tahmin_yap(istek: TahminIstek):
     sinif     = 1 if y_prob >= istek.esik else 0
     sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
 
+    # ── Tahmin geçmişini kaydet ──────────────────────────────
+    try:
+        from database.predictions_repo import tahmin_kaydet_db
+        su = istek.su_parametreleri
+        tahmin_kaydet_db(
+            dosya_adi        = istek.dosya_adi,
+            sinif            = sinif,
+            sinif_adi        = sinif_adi,
+            olasilik         = round(float(y_prob), 4),
+            esik             = istek.esik,
+            su_parametreleri = {
+                'ph'             : su.ph,
+                'Hardness'       : su.Hardness,
+                'Solids'         : su.Solids,
+                'Chloramines'    : su.Chloramines,
+                'Sulfate'        : su.Sulfate,
+                'Conductivity'   : su.Conductivity,
+                'Organic_carbon' : su.Organic_carbon,
+                'Trihalomethanes': su.Trihalomethanes,
+                'Turbidity'      : su.Turbidity
+            }
+        )
+    except Exception as e:
+        print(f'Tahmin DB kayıt uyarısı: {e}')
+
     return TahminYaniti(
         sinif       = sinif,
         sinif_adi   = sinif_adi,

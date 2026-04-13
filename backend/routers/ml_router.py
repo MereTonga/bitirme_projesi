@@ -92,7 +92,12 @@ def ml_egit_ve_degerlendir(model_obj, istek, hiperparametreler):
         egitim_suresi     = model_obj.egitim_suresi,
         metrikler         = metrikler,
         model_turu        = 'ml',
-        ozel_isim         = ozel_isim
+        ozel_isim         = ozel_isim,
+        preprocessing_ayar = {
+            'imputer': istek.preprocessing.imputer_yontem,
+            'scaler' : istek.preprocessing.scaler_yontem,
+            'denge'  : istek.preprocessing.dengesizlik
+        }
     )
 
     # 6. Sonuç

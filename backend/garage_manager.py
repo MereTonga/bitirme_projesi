@@ -29,8 +29,7 @@ OZELLIK_KOLONLARI = [
 
 def benzersiz_isim_uret(model_adi, hiperparametreler):
     """
-    Model adı ve hiperparametrelerden benzersiz
-    dosya adı üretir.
+    Model adı ve hiperparametrelerden benzersiz dosya adı üretir.
     """
     zaman_damgasi = datetime.now().strftime('%Y%m%d_%H%M%S')
     kisaltmalar = {
@@ -77,19 +76,22 @@ def model_kaydet(
     egitim_suresi,
     metrikler,
     model_turu  = 'ml',
-    ozel_isim   = None
+    ozel_isim   = None,
+    preprocessing_ayar = None
 ):
     """
-    ML modelini metadata ile birlikte garage'a kaydeder.
+    ML modelini .pkl olarak kaydeder ve
+    metadata'yı veritabanına yazar.
 
-    Döndürür:
-        {'dosya_adi', 'tam_yol', 'goruntu_adi'}
+    Parametreler:
+        preprocessing_ayar: {'imputer': str, 'scaler': str, 'denge': str}
     """
     os.makedirs(GARAGE_YOLU, exist_ok=True)
 
     dosya_adi   = benzersiz_isim_uret(model_adi, hiperparametreler)
     tam_yol     = os.path.join(GARAGE_YOLU, dosya_adi + '.pkl')
     goruntu_adi = ozel_isim or dosya_adi
+    boyut_kb    = 0.0
 
     metadata = {
         'model'            : model_objesi,
@@ -103,6 +105,30 @@ def model_kaydet(
     }
 
     joblib.dump(metadata, tam_yol)
+    boyut_kb = os.path.getsize(tam_yol) / 1024
+    
+    # ── Veritabanına kaydet ───────────────────────────────────
+    try:
+        from database.models_repo import model_kaydet_db
+        pre = preprocessing_ayar or {}
+        model_kaydet_db(
+            dosya_adi         = dosya_adi + '.pkl',
+            goruntu_adi       = goruntu_adi,
+            model_adi         = model_adi,
+            model_turu        = model_turu,
+            egitim_suresi     = egitim_suresi,
+            accuracy          = metrikler.get('accuracy', 0),
+            f1                = metrikler.get('f1', 0),
+            roc_auc           = metrikler.get('roc_auc', 0),
+            hiperparametreler = hiperparametreler,
+            imputer_yontem    = pre.get('imputer', 'median'),
+            scaler_yontem     = pre.get('scaler',  'robust'),
+            dengesizlik       = pre.get('denge',   'smote'),
+            boyut_kb          = round(boyut_kb, 1)
+        )
+    except Exception as e:
+        print(f'DB kayıt uyarısı: {e}')
+    
     return {
         'dosya_adi'  : dosya_adi + '.pkl',
         'tam_yol'    : tam_yol,
@@ -116,15 +142,23 @@ def model_kaydet(
 
 def garage_listele(model_turu=None):
     """
-    Garage'daki tüm modelleri listeler.
-    ML ve DL modellerini birlikte gösterir.
-
-    Parametreler:
-        model_turu: 'ml', 'dl' veya None (hepsi)
-
-    Döndürür:
-        liste: kayıt zamanına göre azalan sıralı
+    Önce veritabanından listeler.
+    DB başarısız olursa dosya sistemine döner.
     """
+    
+    try:
+        from database.models_repo import tum_modelleri_getir
+        db_liste = tum_modelleri_getir(model_turu=model_turu)
+        if db_liste:
+            return db_liste
+    except Exception:
+        pass
+    
+    # Fallback: dosya sistemi
+    return _dosya_sisteminden_listele(model_turu)
+
+def _dosya_sisteminden_listele(model_turu=None):
+    """Veritabanı yoksa dosyaları okur (fallback)."""
     if not os.path.exists(GARAGE_YOLU):
         return []
 
@@ -135,7 +169,6 @@ def garage_listele(model_turu=None):
             continue
         if not dosya.endswith('.pkl'):
             continue
-
         tam_yol = os.path.join(GARAGE_YOLU, dosya)
         try:
             meta  = joblib.load(tam_yol)
@@ -235,9 +268,15 @@ def model_sil(dosya_adi):
     gecmis_yol = os.path.join(GARAGE_YOLU, gecmis_adi)
     if os.path.exists(gecmis_yol):
         os.remove(gecmis_yol)
+        
+    # Veritabanından sil
+    try:
+        from database.models_repo import model_sil_db
+        model_sil_db(dosya_adi)
+    except Exception as e:
+        print(f'DB silme uyarısı: {e}')
 
     return True
-
 
 # ─────────────────────────────────────────
 # 6. KARŞILAŞTIRMA TABLOSU
@@ -256,17 +295,26 @@ def karsilastirma_tablosu(model_turu=None):
     if not liste:
         return pd.DataFrame()
 
-    df = pd.DataFrame(liste)[[
-        'goruntu_adi', 'model_adi', 'model_turu',
-        'accuracy', 'f1', 'roc_auc',
-        'egitim_suresi', 'kayit_zamani', 'dosya_adi'
-    ]]
-    df.columns = [
-        'İsim', 'Model', 'Tür',
-        'Accuracy', 'F1', 'ROC-AUC',
-        'Eğitim Süresi', 'Kayıt Zamanı', 'Dosya'
-    ]
-    return df.sort_values(
+    df = pd.DataFrame(liste)
+    
+    # Sütun adlarını normalize et
+    kolon_map = {
+        'goruntu_adi'  : 'İsim',
+        'model_adi'    : 'Model',
+        'model_turu'   : 'Tür',
+        'accuracy'     : 'Accuracy',
+        'f1'           : 'F1',
+        'roc_auc'      : 'ROC-AUC',
+        'egitim_suresi': 'Eğitim Süresi',
+        'kayit_zamani' : 'Kayıt Zamanı',
+        'dosya_adi'    : 'Dosya'
+    }
+    
+    mevcut_kolonlar = {k: v for k, v in kolon_map.items() if k in df.columns}
+    df = df.rename(columns=mevcut_kolonlar)
+
+    kolonlar = [v for v in kolon_map.values() if v in df.columns]
+    return df[kolonlar].sort_values(
         'ROC-AUC', ascending=False
     ).reset_index(drop=True)
 
