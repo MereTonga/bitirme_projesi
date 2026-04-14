@@ -10,7 +10,8 @@ from api_client import (
     model_sil, tahmin_yap, egitim_gecmisi,
     db_modelleri_getir, db_tahminleri_getir,
     db_tahmin_istatistik, db_gunluk_dagilim,
-    db_model_istatistik, model_notu_guncelle_api
+    db_model_istatistik, model_notu_guncelle_api,
+    tek_ornek_acikla
 )
 
 RENKLER = {
@@ -378,29 +379,77 @@ def goster():
 
                 if 'hata' in sonuc:
                     st.error(f'❌ {sonuc["hata"]}')
+                    st.session_state['garaj_son_tahmin'] = None
+                    st.session_state['garaj_son_tahmin_girdi'] = None
+                    st.session_state.pop('garaj_shap', None)
                 else:
-                    st.divider()
-                    if sonuc['sinif'] == 1:
-                        st.success('## ✅ İçilebilir Su')
-                    else:
-                        st.error('## ❌ İçilemez Su')
+                    st.session_state['garaj_son_tahmin'] = sonuc
+                    st.session_state['garaj_son_tahmin_girdi'] = {
+                        'dosya_adi'       : secili['dosya_adi'],
+                        'model_turu'      : secili['model_turu'],
+                        'su_parametreleri': dict(degerler),
+                        'esik'            : esik
+                    }
+                    st.session_state.pop('garaj_shap', None)
 
-                    tc1, tc2 = st.columns([2, 1])
-                    with tc1:
-                        st.markdown('**İçilebilir Olma Olasılığı:**')
-                        st.progress(sonuc['olasilik'])
-                        st.caption(
-                            f'{sonuc["olasilik"]:.1%} '
-                            f'(Eşik: {esik:.2f})'
-                        )
-                    with tc2:
-                        st.metric('Olasılık', f'{sonuc["olasilik"]:.4f}')
-                        st.metric('Sonuç',    sonuc['sinif_adi'])
+            sonuc = st.session_state.get('garaj_son_tahmin')
+            girdi = st.session_state.get('garaj_son_tahmin_girdi')
 
+            if sonuc and girdi:
+                st.divider()
+                if sonuc['sinif'] == 1:
+                    st.success('## ✅ İçilebilir Su')
+                else:
+                    st.error('## ❌ İçilemez Su')
+
+                tc1, tc2 = st.columns([2, 1])
+                with tc1:
+                    st.markdown('**İçilebilir Olma Olasılığı:**')
+                    st.progress(sonuc['olasilik'])
                     st.caption(
-                        f'Model: `{sonuc["goruntu_adi"]}` '
-                        f'({secili["model_turu"].upper()}) — '
-                        f'Tahmin veritabanına kaydedildi ✅'
+                        f'{sonuc["olasilik"]:.1%} '
+                        f'(Eşik: {girdi["esik"]:.2f})'
+                    )
+                with tc2:
+                    st.metric('Olasılık', f'{sonuc["olasilik"]:.4f}')
+                    st.metric('Sonuç', sonuc['sinif_adi'])
+
+                st.caption(
+                    f'Model: {sonuc["goruntu_adi"]} '
+                    f'({girdi["model_turu"].upper()}) — '
+                    f'Tahmin veritabanına kaydedildi ✅'
+                )
+
+                # SHAP Waterfall
+                st.divider()
+                st.markdown('**🔍 Bu Tahmini Açıkla (SHAP)**')
+                shap_btn = st.button(
+                    '🔍 SHAP Waterfall Hesapla',
+                    key='garaj_shap_btn'
+                )
+                if shap_btn:
+                    with st.spinner('SHAP hesaplanıyor...'):
+                        shap_sonuc = tek_ornek_acikla(
+                            dosya_adi        = girdi['dosya_adi'],
+                            model_turu       = girdi['model_turu'],
+                            su_parametreleri = girdi['su_parametreleri']
+                        )
+                    if 'hata' in shap_sonuc:
+                        st.error(f'SHAP hatası: {shap_sonuc["hata"]}')
+                    else:
+                        st.session_state['garaj_shap'] = shap_sonuc
+
+                if st.session_state.get('garaj_shap'):
+                    shap_s = st.session_state['garaj_shap']
+                    from pages.shap_gorsellestirme import waterfall_plot
+                    fig_wf = waterfall_plot(
+                        shap_s['waterfall'],
+                        baslik=f'{shap_s["goruntu_adi"]} — SHAP Waterfall'
+                    )
+                    st.plotly_chart(fig_wf, use_container_width=True)
+                    st.caption(
+                        'Her çubuğun yüksekliği o özelliğin '
+                        'tahmini ne kadar etkilediğini gösterir.'
                     )
 
     # ══════════════════════════════════════════════════════════

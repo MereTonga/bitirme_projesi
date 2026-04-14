@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
-from api_client import ml_egit
+from api_client import ml_egit, ozet_acikla
 
 
 # ─────────────────────────────────────────
@@ -316,6 +316,41 @@ def goster():
             )
 
             st.success(f'💾 Model garajına kaydedildi: `{sonuc["dosya_adi"]}`')
+
+    # ── SHAP Özet Açıklama ──────────────────────────────────
+    if st.session_state.get('son_ml_sonuc'):
+        sonuc = st.session_state['son_ml_sonuc']
+        st.divider()
+        st.subheader('🔍 Model Açıklaması (SHAP)')
+
+        with st.expander('📊 Özellik Önemi — SHAP Özet', expanded=False):
+            st.caption(
+                'Bu grafik modelin hangi özelliklere ne kadar '
+                'önem verdiğini gösterir. Hesaplama birkaç saniye sürebilir.'
+            )
+            if st.button('📊 SHAP Özet Hesapla', key='ml_shap_ozet_btn'):
+                with st.spinner('SHAP değerleri hesaplanıyor...'):
+                    ozet = ozet_acikla(
+                        dosya_adi  = sonuc['dosya_adi'],
+                        model_turu = 'ml',
+                        n_ornek    = 100
+                    )
+                if 'hata' in ozet:
+                    st.error(f"SHAP hatası: {ozet['hata']}")
+                else:
+                    st.session_state['son_ml_shap_ozet'] = ozet
+
+            if st.session_state.get('son_ml_shap_ozet'):
+                ozet = st.session_state['son_ml_shap_ozet']
+                from pages.shap_gorsellestirme import ozet_bar_plot
+                fig = ozet_bar_plot(
+                    ozet,
+                    baslik=f"{sonuc['model_adi']} — SHAP Özellik Önemi"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption(
+                    f"En önemli 3 özellik: " + ', '.join(ozet['onem_sirasi'][:3])
+                )
 
     else:
         st.info(
