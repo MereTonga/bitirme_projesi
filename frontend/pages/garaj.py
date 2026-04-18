@@ -11,7 +11,7 @@ from api_client import (
     db_modelleri_getir, db_tahminleri_getir,
     db_tahmin_istatistik, db_gunluk_dagilim,
     db_model_istatistik, model_notu_guncelle_api,
-    tek_ornek_acikla
+    tek_ornek_acikla, toplu_tahmin_yap
 )
 
 RENKLER = {
@@ -90,9 +90,10 @@ def goster():
     st.header('🏆 Model Garajı & Tahmin')
 
     # ── Ana sekmeler ──────────────────────────────────────────
-    ana1, ana2, ana3 = st.tabs([
+    ana1, ana2, ana3, ana4 = st.tabs([
         '📋 Modeller',
         '🔮 Tahmin',
+        '📦 Toplu Tahmin',
         '📈 Tahmin Geçmişi'
     ])
 
@@ -453,9 +454,15 @@ def goster():
                     )
 
     # ══════════════════════════════════════════════════════════
-    # SEKME 3: TAHMİN GEÇMİŞİ
+    # SEKME 3: TOPLU TAHMİN
     # ══════════════════════════════════════════════════════════
     with ana3:
+        _toplu_tahmin_sekmesi(tum_modeller)
+
+    # ══════════════════════════════════════════════════════════
+    # SEKME 4: TAHMİN GEÇMİŞİ
+    # ══════════════════════════════════════════════════════════
+    with ana4:
         st.subheader('📈 Tahmin Geçmişi')
 
         if st.button('🔄 Yenile', key='gecmis_yenile'):
@@ -552,3 +559,296 @@ def goster():
             )
         else:
             st.info('Henüz kayıtlı tahmin yok.')
+
+
+# ─────────────────────────────────────────
+# TOPLU TAHMİN SEKMESİ
+# ─────────────────────────────────────────
+
+def _toplu_tahmin_sekmesi(tum_modeller):
+    """
+    Sekme 3: Toplu Tahmin — CSV yükleme ve toplu tahmin arayüzü.
+    """
+    import io
+    import pandas as pd
+
+    st.subheader('📦 Toplu Tahmin')
+    st.caption(
+        'CSV dosyası yükleyin, tüm satırlar için otomatik '
+        'tahmin yapılsın. Maksimum 1000 satır.'
+    )
+
+    OZELLIK_KOLONLARI = [
+        'ph', 'Hardness', 'Solids', 'Chloramines',
+        'Sulfate', 'Conductivity', 'Organic_carbon',
+        'Trihalomethanes', 'Turbidity'
+    ]
+
+    # ── Örnek CSV İndir ───────────────────────────────────────
+    with st.expander('📥 Örnek CSV Formatı'):
+        ornek_veri = {
+            'ph'             : [7.0, 3.5, None, 8.1],
+            'Hardness'       : [196.0, 290.0, 180.0, 210.0],
+            'Solids'         : [20000.0, 55000.0, 18000.0, 22000.0],
+            'Chloramines'    : [7.0, 12.0, 6.5, 7.8],
+            'Sulfate'        : [333.0, 450.0, None, 310.0],
+            'Conductivity'   : [426.0, 700.0, 400.0, 450.0],
+            'Organic_carbon' : [14.0, 25.0, 13.0, 15.0],
+            'Trihalomethanes': [66.0, 110.0, None, 70.0],
+            'Turbidity'      : [4.0, 6.5, 3.8, 4.2]
+        }
+        ornek_df = pd.DataFrame(ornek_veri)
+        st.dataframe(ornek_df, use_container_width=True, hide_index=True)
+        st.caption(
+            'Boş hücreler (NaN) desteklenir — '
+            'pipeline otomatik doldurur.'
+        )
+
+        # İndir butonu
+        csv_bytes = ornek_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label     = '⬇️ Örnek CSV İndir',
+            data      = csv_bytes,
+            file_name = 'su_kalitesi_ornek.csv',
+            mime      = 'text/csv',
+            key       = 'ornek_indir'
+        )
+
+    st.divider()
+
+    # ── CSV Yükle ─────────────────────────────────────────────
+    yuklenen = st.file_uploader(
+        'CSV dosyası yükleyin:',
+        type    = ['csv'],
+        key     = 'toplu_csv'
+    )
+
+    if yuklenen is None:
+        st.info(
+            '👆 CSV dosyası yükleyin veya '
+            'örnek formatı indirip doldurun.'
+        )
+        return
+
+    # CSV oku
+    try:
+        df_yuklu = pd.read_csv(yuklenen)
+    except Exception as e:
+        st.error(f'CSV okunamadı: {e}')
+        return
+
+    # ── Kolon Doğrulama ───────────────────────────────────────
+    eksik_kolonlar = [
+        k for k in OZELLIK_KOLONLARI
+        if k not in df_yuklu.columns
+    ]
+    if eksik_kolonlar:
+        st.error(
+            f'❌ Eksik kolonlar: **{", ".join(eksik_kolonlar)}**\n\n'
+            'Örnek CSV formatını indirip kontrol edin.'
+        )
+        return
+
+    # Boyut kontrolü
+    if len(df_yuklu) > 1000:
+        st.warning(
+            f'⚠️ Dosyanız {len(df_yuklu)} satır içeriyor. '
+            'İlk 1000 satır kullanılacak.'
+        )
+        df_yuklu = df_yuklu.head(1000)
+
+    # ── Önizleme ──────────────────────────────────────────────
+    st.success(f'✅ {len(df_yuklu)} satır yüklendi.')
+
+    with st.expander('👁️ Veri Önizleme (İlk 5 Satır)'):
+        st.dataframe(
+            df_yuklu[OZELLIK_KOLONLARI].head(),
+            use_container_width = True,
+            hide_index          = True
+        )
+        eksik_ozet = df_yuklu[OZELLIK_KOLONLARI].isnull().sum()
+        eksik_var  = eksik_ozet[eksik_ozet > 0]
+        if not eksik_var.empty:
+            st.caption(
+                'Eksik değerler: ' +
+                ', '.join(
+                    f'{k}={v}' for k, v in eksik_var.items()
+                ) + ' → Pipeline dolduracak.'
+            )
+
+    st.divider()
+
+    # ── Model ve Eşik Seçimi ──────────────────────────────────
+    if not tum_modeller:
+        st.warning('Tahmin için önce model eğitin.')
+        return
+
+    mc1, mc2 = st.columns([3, 1])
+    with mc1:
+        model_idx = st.selectbox(
+            'Model seçin:',
+            range(len(tum_modeller)),
+            format_func = lambda i: (
+                f"[{tum_modeller[i]['model_turu'].upper()}] "
+                f"{tum_modeller[i]['goruntu_adi']} "
+                f"(AUC: {tum_modeller[i]['roc_auc']})"
+            ),
+            key = 'toplu_model_sec'
+        )
+    with mc2:
+        toplu_esik = st.slider(
+            'Karar Eşiği', 0.1, 0.9, 0.5,
+            step = 0.05,
+            key  = 'toplu_esik'
+        )
+
+    secili = tum_modeller[model_idx]
+
+    # ── Toplu Tahmin Butonu ───────────────────────────────────
+    if st.button(
+        f'🚀 {len(df_yuklu)} Satır İçin Tahmin Yap',
+        type = 'primary',
+        key  = 'toplu_tahmin_btn'
+    ):
+        # DataFrame'i dict listesine çevir
+        su_listesi = []
+        for _, satir in df_yuklu[OZELLIK_KOLONLARI].iterrows():
+            su_dict = {}
+            for kolon in OZELLIK_KOLONLARI:
+                val = satir[kolon]
+                su_dict[kolon] = None if pd.isna(val) else float(val)
+            su_listesi.append(su_dict)
+
+        with st.spinner(
+            f'{len(su_listesi)} satır tahmin ediliyor...'
+        ):
+            sonuc = toplu_tahmin_yap(
+                dosya_adi  = secili['dosya_adi'],
+                model_turu = secili['model_turu'],
+                su_listesi = su_listesi,
+                esik       = toplu_esik
+            )
+
+        if 'hata' in sonuc:
+            st.error(f'❌ Hata: {sonuc["hata"]}')
+        else:
+            st.session_state['toplu_sonuc']   = sonuc
+            st.session_state['toplu_df_yuklu'] = df_yuklu
+
+    # ── Sonuçları Göster ──────────────────────────────────────
+    if not st.session_state.get('toplu_sonuc'):
+        return
+
+    sonuc   = st.session_state['toplu_sonuc']
+    df_orig = st.session_state.get('toplu_df_yuklu', pd.DataFrame())
+
+    st.divider()
+    st.subheader('📊 Tahmin Sonuçları')
+
+    # Özet kartları
+    sk1, sk2, sk3, sk4 = st.columns(4)
+    with sk1:
+        st.metric('Toplam Satır',  sonuc['toplam'])
+    with sk2:
+        st.metric('✅ İçilebilir', sonuc['icilir_sayi'])
+    with sk3:
+        st.metric('❌ İçilemez',   sonuc['icilmez_sayi'])
+    with sk4:
+        oran = sonuc['icilir_oran']
+        st.metric('İçilebilir %', f'%{oran*100:.1f}')
+
+    if sonuc.get('hatali', 0) > 0:
+        st.warning(f'⚠️ {sonuc["hatali"]} satırda hata oluştu.')
+
+    # Pasta grafik
+    gc1, gc2 = st.columns([1, 2])
+    with gc1:
+        fig_pasta = go.Figure(go.Pie(
+            labels       = ['İçilebilir', 'İçilemez'],
+            values       = [
+                sonuc['icilir_sayi'],
+                sonuc['icilmez_sayi']
+            ],
+            marker_colors = [
+                RENKLER['ikincil'],
+                RENKLER['hata']
+            ],
+            hole         = 0.4,
+            textinfo     = 'label+percent'
+        ))
+        fig_pasta.update_layout(
+            height     = 280,
+            showlegend = False,
+            margin     = dict(t=20, b=20, l=10, r=10)
+        )
+        st.plotly_chart(fig_pasta, use_container_width=True)
+
+    with gc2:
+        st.markdown(f'''
+        | Alan | Değer |
+        |------|-------|
+        | Model | `{sonuc["goruntu_adi"]}` |
+        | Karar Eşiği | `{sonuc["esik"]}` |
+        | Başarılı Tahmin | `{sonuc["basarili"]}` |
+        | İçilebilir Oranı | `%{sonuc["icilir_oran"]*100:.1f}` |
+        ''')
+
+    # Sonuç tablosu
+    st.subheader('📋 Detaylı Sonuçlar')
+
+    # Orijinal veri + tahmin sonuçları birleştir
+    sonuc_satirlar = sonuc['sonuclar']
+    tahmin_df = pd.DataFrame([
+        {
+            'Satır No' : s['satir_no'],
+            'Tahmin'   : s['sinif_adi'],
+            'Olasılık' : s['olasilik'],
+            'Hata'     : s.get('hata', '')
+        }
+        for s in sonuc_satirlar
+    ])
+
+    # Orijinal kolonlarla birleştir
+    df_orig_reset = df_orig[OZELLIK_KOLONLARI].reset_index(drop=True)
+    df_orig_reset.index = df_orig_reset.index + 1
+    df_orig_reset.index.name = 'Satır No'
+    df_birlesik = df_orig_reset.join(
+        tahmin_df.set_index('Satır No'),
+        how = 'left'
+    ).reset_index()
+
+    # Renklendirme
+    def satir_rengi(satir):
+        if satir.get('Tahmin') == 'İçilebilir':
+            return ['background-color: #D1FAE5'] * len(satir)
+        elif satir.get('Tahmin') == 'İçilemez':
+            return ['background-color: #FEE2E2'] * len(satir)
+        return [''] * len(satir)
+
+    st.dataframe(
+        df_birlesik.style.apply(satir_rengi, axis=1).format({
+            'Olasılık': '{:.4f}',
+            'ph'      : '{:.2f}',
+            'Hardness': '{:.1f}'
+        }, na_rep='-'),
+        use_container_width = True,
+        hide_index          = True,
+        height              = 400
+    )
+
+    # ── CSV İndir ─────────────────────────────────────────────
+    st.subheader('⬇️ Sonuçları İndir')
+
+    csv_sonuc = df_birlesik.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label     = '⬇️ Sonuç CSV İndir',
+        data      = csv_sonuc,
+        file_name = f'tahmin_sonuclari_{secili["model_adi"]}.csv',
+        mime      = 'text/csv',
+        key       = 'sonuc_indir'
+    )
+    st.caption(
+        f'Toplam {len(df_birlesik)} satır, '
+        f'{sonuc["icilir_sayi"]} içilebilir, '
+        f'{sonuc["icilmez_sayi"]} içilemez tahmin.'
+    )
