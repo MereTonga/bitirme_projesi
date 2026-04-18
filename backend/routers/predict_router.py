@@ -398,3 +398,204 @@ def model_notu_guncelle_endpoint(dosya_adi: str, not_metni: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────
+# TOPLU TAHMİN ENDPOINTİ
+# ─────────────────────────────────────────
+
+@router.post('/predict/batch')
+def toplu_tahmin(istek: dict):
+    """
+    Birden fazla su örneği için toplu tahmin yapar.
+    Maksimum 1000 satır desteklenir.
+
+    Her satır için:
+    - Pipeline uygulanır (eksik değerler doldurulur)
+    - Model tahmini yapılır
+    - Veritabanına kaydedilir
+    """
+    from schemas.predict_schemas import (
+        TopluTahminIstek, TopluTahminYaniti, TopluTahminSatir
+    )
+    import pandas as pd
+
+    # Manuel parse — FastAPI'nin otomatik parse'ı için
+    try:
+        if not isinstance(istek, dict):
+            istek_dict = istek.dict()
+        else:
+            istek_dict = istek
+    except Exception:
+        istek_dict = istek
+
+    dosya_adi  = istek_dict['dosya_adi']
+    model_turu = istek_dict['model_turu']
+    su_listesi = istek_dict['su_listesi']
+    esik       = istek_dict.get('esik', 0.5)
+
+    # Boyut kontrolü
+    if len(su_listesi) > 1000:
+        raise HTTPException(
+            status_code = 400,
+            detail      = 'Maksimum 1000 satır desteklenir.'
+        )
+    if len(su_listesi) == 0:
+        raise HTTPException(
+            status_code = 400,
+            detail      = 'Boş liste gönderilemez.'
+        )
+
+    # Pipeline yükle
+    try:
+        pipe = pipeline_yukle()
+    except Exception as e:
+        raise HTTPException(
+            status_code = 500,
+            detail      = f'Pipeline hatası: {str(e)}'
+        )
+
+    # Model yükle
+    try:
+        if model_turu == 'ml':
+            meta      = model_yukle(dosya_adi)
+            model_obj = meta['model']
+            model_adi = meta['model_adi']
+            gor_adi   = meta.get('goruntu_adi', model_adi)
+        elif model_turu == 'dl':
+            from dl.dl_garage import ann_yukle
+            import torch
+            device    = torch.device(
+                'cuda' if torch.cuda.is_available() else 'cpu'
+            )
+            ann_model, dl_meta = ann_yukle(dosya_adi)
+            model_adi = 'ann'
+            gor_adi   = dl_meta.get('goruntu_adi', 'ann')
+        else:
+            raise HTTPException(
+                status_code = 400,
+                detail      = 'model_turu ml veya dl olmalı.'
+            )
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code = 404,
+            detail      = f'Model bulunamadı: {dosya_adi}'
+        )
+
+    # Toplu işlem
+    OZELLIK_KOLONLARI = [
+        'ph', 'Hardness', 'Solids', 'Chloramines',
+        'Sulfate', 'Conductivity', 'Organic_carbon',
+        'Trihalomethanes', 'Turbidity'
+    ]
+
+    sonuclar     = []
+    basarili     = 0
+    hatali       = 0
+    icilir_sayi  = 0
+    icilmez_sayi = 0
+
+    # Tüm geçerli satırları topla
+    gecerli_satirlar = []
+    gecerli_indeksler = []
+
+    for i, su in enumerate(su_listesi):
+        try:
+            satir = {k: su.get(k) for k in OZELLIK_KOLONLARI}
+            gecerli_satirlar.append(satir)
+            gecerli_indeksler.append(i)
+        except Exception as e:
+            sonuclar.append(TopluTahminSatir(
+                satir_no  = i + 1,
+                sinif     = -1,
+                sinif_adi = 'Hata',
+                olasilik  = 0.0,
+                hata      = str(e)
+            ))
+            hatali += 1
+
+    # Toplu pipeline transform
+    if gecerli_satirlar:
+        try:
+            df_batch = pd.DataFrame(gecerli_satirlar)
+            X_batch  = pipe.transform(df_batch)
+
+            # Tahmin
+            if model_turu == 'ml':
+                y_pred = model_obj.predict(X_batch)
+                if hasattr(model_obj, 'predict_proba'):
+                    y_prob = model_obj.predict_proba(X_batch)[:, 1]
+                else:
+                    y_prob = y_pred.astype(float)
+
+            elif model_turu == 'dl':
+                from dl.dl_garage import ann_tahmin
+                tahmin_sonuc = ann_tahmin(ann_model, X_batch, device)
+                y_pred = np.array(tahmin_sonuc['sinif'])
+                y_prob = np.array(tahmin_sonuc['olasilik'])
+
+            # Eşik uygula ve sonuçları oluştur
+            for j, (idx, pred, prob) in enumerate(
+                zip(gecerli_indeksler, y_pred, y_prob)
+            ):
+                sinif     = 1 if float(prob) >= esik else 0
+                sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
+                olasilik  = round(float(prob), 4)
+
+                if sinif == 1:
+                    icilir_sayi += 1
+                else:
+                    icilmez_sayi += 1
+                basarili += 1
+
+                sonuclar.append(TopluTahminSatir(
+                    satir_no  = idx + 1,
+                    sinif     = sinif,
+                    sinif_adi = sinif_adi,
+                    olasilik  = olasilik
+                ))
+
+                # Veritabanına kaydet
+                try:
+                    from database.predictions_repo import tahmin_kaydet_db
+                    tahmin_kaydet_db(
+                        dosya_adi        = dosya_adi,
+                        sinif            = sinif,
+                        sinif_adi        = sinif_adi,
+                        olasilik         = olasilik,
+                        esik             = esik,
+                        su_parametreleri = gecerli_satirlar[j]
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            for idx in gecerli_indeksler:
+                sonuclar.append(TopluTahminSatir(
+                    satir_no  = idx + 1,
+                    sinif     = -1,
+                    sinif_adi = 'Hata',
+                    olasilik  = 0.0,
+                    hata      = str(e)
+                ))
+                hatali += len(gecerli_indeksler)
+
+    # Satır numarasına göre sırala
+    sonuclar.sort(key=lambda x: x.satir_no)
+    toplam = basarili + hatali
+
+    return {
+        'toplam'      : toplam,
+        'basarili'    : basarili,
+        'hatali'      : hatali,
+        'icilir_sayi' : icilir_sayi,
+        'icilmez_sayi': icilmez_sayi,
+        'icilir_oran' : round(icilir_sayi / basarili, 4)
+                        if basarili > 0 else 0,
+        'model_adi'   : model_adi,
+        'goruntu_adi' : gor_adi,
+        'esik'        : esik,
+        'sonuclar'    : [s.dict() for s in sonuclar]
+    }

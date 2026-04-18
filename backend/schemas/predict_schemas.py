@@ -95,3 +95,45 @@ class GarajModelBilgisi(BaseModel):
     egitim_suresi  : float
     kayit_zamani   : str
     boyut_kb       : float
+
+
+# ─────────────────────────────────────────
+# TOPLU TAHMİN ŞEMALARI
+# ─────────────────────────────────────────
+
+class TopluTahminIstek(BaseModel):
+    """
+    Toplu tahmin isteği.
+    su_listesi: Her eleman bir SuParametreleri dict'i.
+    """
+    dosya_adi   : str
+    model_turu  : Literal['ml', 'dl']
+    su_listesi  : List[dict]
+    esik        : float = Field(
+        default=0.5, ge=0.1, le=0.9
+    )
+
+    class Config:
+        # Liste boyutu kontrolü
+        pass
+
+
+class TopluTahminSatir(BaseModel):
+    satir_no    : int
+    sinif       : int
+    sinif_adi   : str
+    olasilik    : float
+    hata        : Optional[str] = None
+
+
+class TopluTahminYaniti(BaseModel):
+    toplam          : int
+    basarili        : int
+    hatali          : int
+    icilir_sayi     : int
+    icilmez_sayi    : int
+    icilir_oran     : float
+    model_adi       : str
+    goruntu_adi     : str
+    esik            : float
+    sonuclar        : List[TopluTahminSatir]

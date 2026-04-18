@@ -197,3 +197,21 @@ def ozet_acikla(
         'model_turu': model_turu,
         'n_ornek'   : n_ornek
     })
+
+
+# ─────────────────────────────────────────
+# TOPLU TAHMİN
+# ─────────────────────────────────────────
+
+def toplu_tahmin_yap(
+    dosya_adi  : str,
+    model_turu : str,
+    su_listesi : list,
+    esik       : float = 0.5
+) -> dict:
+    return _post('/predict/batch', {
+        'dosya_adi'  : dosya_adi,
+        'model_turu' : model_turu,
+        'su_listesi' : su_listesi,
+        'esik'       : esik
+    })
