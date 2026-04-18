@@ -125,3 +125,36 @@ class MLEgitimYaniti(BaseModel):
     conf_matrix        : List[List[int]]
     hiperparametreler  : Dict[str, Any]
     cache_hit          : bool = False
+
+
+# ─────────────────────────────────────────
+# OPTİMİZASYON ŞEMALARI
+# ─────────────────────────────────────────
+
+class OptimizasyonIstek(BaseModel):
+    """
+    Hiperparametre optimizasyonu isteği.
+    """
+    model_adi       : str
+    n_trials        : int   = Field(default=20, ge=5,  le=100)
+    timeout         : Optional[int] = Field(
+        default=None, ge=10, le=600,
+        description='Maksimum süre (saniye)'
+    )
+    preprocessing   : PreprocessingAyarlari = PreprocessingAyarlari()
+    ozel_isim       : Optional[str] = None
+
+
+class TrialSonuc(BaseModel):
+    trial_no : int
+    auc      : float
+    params   : Dict[str, Any]
+
+
+class OptimizasyonYaniti(BaseModel):
+    model_adi       : str
+    en_iyi_params   : Dict[str, Any]
+    en_iyi_auc      : float
+    toplam_trial    : int
+    trial_gecmisi   : List[TrialSonuc]
+    optimizasyon_suresi: float

@@ -215,3 +215,30 @@ def toplu_tahmin_yap(
         'su_listesi' : su_listesi,
         'esik'       : esik
     })
+
+
+# ─────────────────────────────────────────
+# HİPERPARAMETRE OPTİMİZASYONU
+# ─────────────────────────────────────────
+
+def optimize_et(
+    model_adi     : str,
+    n_trials      : int  = 20,
+    timeout       : int  = None,
+    preprocessing : dict = None
+) -> dict:
+    payload = {
+        'model_adi': model_adi,
+        'n_trials' : n_trials
+    }
+    if timeout:
+        payload['timeout'] = timeout
+    if preprocessing:
+        payload['preprocessing'] = preprocessing
+    return _post('/optimize', payload)
+
+
+def optimizasyon_gecmisi(model_adi: str = None) -> list:
+    params = {'model_adi': model_adi} if model_adi else None
+    sonuc  = _get('/optimize/gecmis', params=params)
+    return sonuc if isinstance(sonuc, list) else []
