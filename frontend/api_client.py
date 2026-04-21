@@ -242,3 +242,38 @@ def optimizasyon_gecmisi(model_adi: str = None) -> list:
     params = {'model_adi': model_adi} if model_adi else None
     sonuc  = _get('/optimize/gecmis', params=params)
     return sonuc if isinstance(sonuc, list) else []
+
+
+# ─────────────────────────────────────────
+# ASENKRON EĞİTİM
+# ─────────────────────────────────────────
+
+def async_ml_egit(model_adi: str, payload: dict) -> dict:
+    return _post(f'/train/ml/async/{model_adi}', payload)
+
+
+def async_ann_egit(payload: dict) -> dict:
+    return _post('/train/dl/async', payload)
+
+
+def async_optimize(
+    model_adi : str,
+    n_trials  : int  = 20,
+    timeout   : int  = None,
+    preprocessing: dict = None
+) -> dict:
+    payload = {'model_adi': model_adi, 'n_trials': n_trials}
+    if timeout:
+        payload['timeout'] = timeout
+    if preprocessing:
+        payload['preprocessing'] = preprocessing
+    return _post('/optimize/async', payload)
+
+
+def job_durum(job_id: str) -> dict:
+    return _get(f'/jobs/{job_id}')
+
+
+def job_listesi(limit: int = 20) -> list:
+    sonuc = _get('/jobs', params={'limit': limit})
+    return sonuc if isinstance(sonuc, list) else []
