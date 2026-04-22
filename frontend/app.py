@@ -65,6 +65,13 @@ with col2:
 
 st.divider()
 
+# Aktif job'ları sidebar'da göster
+try:
+    from pages.job_takip import aktif_joblar_goster
+    aktif_joblar_goster()
+except Exception:
+    pass
+
 # ─────────────────────────────────────────
 # SEKMELER
 # ─────────────────────────────────────────

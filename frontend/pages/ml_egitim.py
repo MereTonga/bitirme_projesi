@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
-from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi
+from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi, async_ml_egit, job_durum
 
 
 # ─────────────────────────────────────────
@@ -292,7 +292,12 @@ def goster():
     # ── İki Mod: Manuel ve Otomatik ───────────────────────────
     mod_sec = st.radio(
         'Eğitim modu:',
-        ['🔧 Manuel Parametre Gir', '🔍 Otomatik Optimize Et (Optuna)'],
+        [
+            '🔧 Manuel Parametre Gir',
+            '🔍 Otomatik Optimize Et (Optuna)',
+            '⚡ Asenkron Eğitim'
+        ],
+        index      = 1,
         horizontal = True,
         key        = 'ml_mod'
     )
@@ -341,7 +346,7 @@ def goster():
     # ══════════════════════════════════════════════════════════
     # OTOMATİK OPTİMİZASYON MODU
     # ══════════════════════════════════════════════════════════
-    else:
+    elif mod_sec == '🔍 Otomatik Optimize Et (Optuna)':
         st.subheader(f'🔍 {MODELLER[model_adi]} Otomatik Optimizasyon')
 
         st.info(
@@ -492,6 +497,82 @@ def goster():
                     )
                 else:
                     st.info('Henüz geçmiş optimizasyon yok.')
+
+    # ══════════════════════════════════════════════════════════
+    # ASENKRON MOD
+    # ══════════════════════════════════════════════════════════
+    elif mod_sec == '⚡ Asenkron Eğitim':
+        
+        st.subheader(f'⚡ {MODELLER[model_adi]} Asenkron Eğitimi')
+        st.info(
+            'Eğitim arka planda çalışır. '
+            'Sayfa donmaz, ilerlemeyi canlı takip edersiniz.'
+        )
+
+        params_async = hiper_panel(model_adi)
+
+        async_btn = st.button(
+            f'⚡ Asenkron Eğit',
+            type = 'primary',
+            key  = 'async_egit_btn'
+        )
+
+        if async_btn:
+            payload = {
+                **params_async,
+                'preprocessing': {
+                    'imputer_yontem': pre_imputer,
+                    'scaler_yontem' : pre_scaler,
+                    'dengesizlik'   : pre_denge
+                }
+            }
+            if ozel_isim:
+                payload['ozel_isim'] = ozel_isim
+
+            with st.spinner('Job başlatılıyor...'):
+                job_yanit = async_ml_egit(model_adi, payload)
+
+            if 'hata' in job_yanit:
+                st.error(f'❌ {job_yanit["hata"]}')
+            else:
+                job_id = job_yanit['job_id']
+                st.session_state['aktif_job_id'] = job_id
+                st.info(
+                    f'🚀 Job başlatıldı: `{job_id}`\n\n'
+                    f'Takip URL: `{job_yanit["takip_url"]}`'
+                )
+
+        # Aktif job varsa takip et
+        if st.session_state.get('aktif_job_id'):
+            job_id = st.session_state['aktif_job_id']
+            mevcut = job_durum(job_id)
+
+            if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
+                st.markdown('**📊 Canlı İlerleme:**')
+                from pages.job_takip import job_progress_goster
+                tamamlanan = job_progress_goster(job_id)
+                if tamamlanan and tamamlanan.get('sonuc'):
+                    st.session_state['son_ml_sonuc'] = tamamlanan['sonuc']
+                    st.session_state['aktif_job_id'] = None
+                    st.success('✅ Eğitim tamamlandı!')
+                    st.rerun()
+
+            elif mevcut and mevcut['durum'] == 'tamamlandi':
+                st.success(
+                    f'✅ Tamamlandı! '
+                    f'ROC-AUC: {mevcut["sonuc"]["roc_auc"]}'
+                )
+                if st.button('Sonuçları Göster', key='async_sonuc_btn'):
+                    st.session_state['son_ml_sonuc'] = mevcut['sonuc']
+                    st.session_state['aktif_job_id'] = None
+                    st.rerun()
+
+            elif mevcut and mevcut['durum'] == 'hata':
+                st.error(
+                    f'❌ Eğitim başarısız: '
+                    f'{mevcut.get("hata_mesaji", "")}'
+                )
+                st.session_state['aktif_job_id'] = None
 
     # ══════════════════════════════════════════════════════════
     # EĞİTİM SONUÇLARI (Her iki mod için ortak)

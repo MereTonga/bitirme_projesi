@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from api_client import ann_egit, egitim_gecmisi
+from api_client import ann_egit, egitim_gecmisi, async_ann_egit, job_durum
 
 
 RENKLER = {
@@ -308,6 +308,14 @@ def goster():
         key         = 'dl_ozel_isim'
     )
 
+    # ── Eğitim Modu ───────────────────────────────────────────
+    dl_mod = st.radio(
+        'Eğitim modu:',
+        ['🔄 Senkron (Bekle)', '⚡ Asenkron (Arka Plan)'],
+        horizontal = True,
+        key        = 'dl_mod'
+    )
+
     # ── Eğit Butonu ───────────────────────────────────────────
     egit_btn = st.button(
         '🚀 ANN Eğit', type='primary', key='dl_egit_btn'
@@ -332,17 +340,61 @@ def goster():
         if ozel_isim:
             payload['ozel_isim'] = ozel_isim
 
-        with st.spinner(
-            f'ANN eğitiliyor... '
-            f'(max {epochs} epoch, GPU aktif 🎮)'
-        ):
-            sonuc = ann_egit(payload)
+        if dl_mod == '🔄 Senkron (Bekle)':
+            with st.spinner(
+                f'ANN eğitiliyor... '
+                f'(max {epochs} epoch, GPU aktif 🎮)'
+            ):
+                sonuc = ann_egit(payload)
 
-        if 'hata' in sonuc:
-            st.error(f'❌ Hata: {sonuc["hata"]}')
-        else:
-            st.success('✅ Eğitim tamamlandı!')
-            st.session_state['son_dl_sonuc'] = sonuc
+            if 'hata' in sonuc:
+                st.error(f'❌ Hata: {sonuc["hata"]}')
+            else:
+                st.success('✅ Eğitim tamamlandı!')
+                st.session_state['son_dl_sonuc'] = sonuc
+
+        else:  # Asenkron mod
+            with st.spinner('Job başlatılıyor...'):
+                job_yanit = async_ann_egit(payload)
+
+            if 'hata' in job_yanit:
+                st.error(f'❌ {job_yanit["hata"]}')
+            else:
+                job_id = job_yanit['job_id']
+                st.session_state['dl_aktif_job_id'] = job_id
+                st.info(
+                    f'🚀 ANN eğitimi başlatıldı: `{job_id}`\n\n'
+                    f'İlerlemeyi aşağıdan takip edin.'
+                )
+
+    # Async DL job takibi
+    if st.session_state.get('dl_aktif_job_id'):
+        job_id  = st.session_state['dl_aktif_job_id']
+        mevcut  = job_durum(job_id)
+
+        if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
+            st.markdown('**📊 Canlı İlerleme:**')
+            from pages.job_takip import job_progress_goster
+            tamamlanan = job_progress_goster(job_id)
+            if tamamlanan and tamamlanan.get('sonuc'):
+                st.session_state['son_dl_sonuc'] = tamamlanan['sonuc']
+                st.session_state['dl_aktif_job_id'] = None
+                st.success('✅ ANN eğitimi tamamlandı!')
+                st.rerun()
+
+        elif mevcut and mevcut['durum'] == 'tamamlandi':
+            st.success(
+                f'✅ ANN tamamlandı! '
+                f'ROC-AUC: {mevcut["sonuc"]["roc_auc"]}'
+            )
+            if st.button('Sonuçları Göster', key='dl_async_sonuc_btn'):
+                st.session_state['son_dl_sonuc'] = mevcut['sonuc']
+                st.session_state['dl_aktif_job_id'] = None
+                st.rerun()
+
+        elif mevcut and mevcut['durum'] == 'hata':
+            st.error(f'❌ ANN eğitimi başarısız: {mevcut.get("hata_mesaji")}')
+            st.session_state['dl_aktif_job_id'] = None
 
     # ── Sonuçları Göster ──────────────────────────────────────
     if st.session_state.get('son_dl_sonuc'):
