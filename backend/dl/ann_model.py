@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 import torch
 import torch.nn as nn
 import numpy as np

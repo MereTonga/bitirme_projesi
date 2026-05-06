@@ -1,10 +1,7 @@
 import os
-import sys
 import joblib
 import numpy as np
 import pandas as pd
-
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
 
 from sklearn.metrics import (
     accuracy_score, f1_score,

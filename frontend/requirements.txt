@@ -1,0 +1,20 @@
+# Frontend (Streamlit UI)
+# Frontend sayfalari (eda.py, preprocessing.py) backend modullerini direkt
+# import ettigi icin sklearn/imblearn/joblib gerekli.
+# PyTorch / XGBoost / LightGBM / SHAP / Optuna gerekmiyor (image kucuk kalir).
+
+# UI
+streamlit
+requests
+
+# Data & Visualization
+pandas
+numpy
+plotly
+# pandas Styler.background_gradient ve diger colormap'li stil islemleri icin gerekli
+matplotlib
+
+# Backend modulleri icin (preprocessor, balancer)
+scikit-learn
+imbalanced-learn
+joblib

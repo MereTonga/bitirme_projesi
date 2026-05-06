@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 from fastapi  import APIRouter, HTTPException
 from typing   import Literal
 

@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 from sklearn.linear_model import LogisticRegression
 from ml.base_model import BaseModel
 

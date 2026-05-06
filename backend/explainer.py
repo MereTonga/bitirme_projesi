@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 import numpy as np
 import pandas as pd
 import shap

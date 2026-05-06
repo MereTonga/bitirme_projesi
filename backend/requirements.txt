@@ -1,0 +1,29 @@
+# Backend (FastAPI + ML/DL stack)
+# NOT: torch CUDA wheel'i Dockerfile'da ayri index'ten kuruluyor.
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Machine Learning
+scikit-learn
+xgboost
+imbalanced-learn
+lightgbm
+
+# Data
+pandas
+numpy
+
+# Visualization (egitim grafikleri icin)
+plotly
+
+# Serialization
+joblib
+
+# Explainability
+shap
+
+# Hyperparameter Optimization
+optuna

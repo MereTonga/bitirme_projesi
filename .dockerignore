@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Modeller / runtime artifacts (volume olarak baglanacak, image'a girmesin!)
+backend/garage/
+database/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Streamlit cache
+.streamlit/cache/
+
+# Notebooks (test scriptleri, container'a gerek yok)
+notebooks/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Documentation
+README.md
+Notlar.txt
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+.coverage
+htmlcov/
+coverage.xml

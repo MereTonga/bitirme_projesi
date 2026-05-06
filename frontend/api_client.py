@@ -1,8 +1,9 @@
+import os
 import requests
 from typing import Optional
 
-# Backend URL — Docker'da değişecek
-API_URL = 'http://localhost:8000'
+# Backend URL — Docker icin ortam degiskeni, lokal icin varsayilan localhost.
+API_URL = os.environ.get('API_URL', 'http://localhost:8000').rstrip('/')
 
 
 def _post(endpoint: str, payload: dict) -> dict:

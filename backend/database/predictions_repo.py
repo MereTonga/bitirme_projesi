@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 from datetime import datetime
 from typing   import Optional
 from database.connection  import db_baglanti

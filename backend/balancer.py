@@ -141,9 +141,6 @@ def dengesizlik_raporu(y_train_once, y_train_sonra, yontem):
 # ─────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
     from data_loader  import veri_yukle
     from preprocessor import eksik_veri_doldur, veri_olceklendir
 

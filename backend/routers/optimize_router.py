@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 import time
 from fastapi import APIRouter, HTTPException
 from schemas.ml_schemas import OptimizasyonIstek, OptimizasyonYaniti
