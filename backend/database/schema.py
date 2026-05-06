@@ -1,7 +1,4 @@
 import os
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 from database.connection import db_baglanti, DB_YOLU
 
 

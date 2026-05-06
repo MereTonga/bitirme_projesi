@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
 import optuna
 import numpy as np
 from sklearn.metrics import roc_auc_score

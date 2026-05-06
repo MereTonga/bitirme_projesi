@@ -24,5 +24,10 @@ streamlit
 requests
 
 # Serialization
-joblibshap
+joblib
+
+# Explainability
+shap
+
+# Hyperparameter Optimization
 optuna

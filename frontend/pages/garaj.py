@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/frontend')
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go

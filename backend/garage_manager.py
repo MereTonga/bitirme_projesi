@@ -1,11 +1,8 @@
 import os
-import sys
 import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime
-
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
 
 GARAGE_YOLU = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),

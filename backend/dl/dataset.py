@@ -84,9 +84,6 @@ def veriyi_tensor_yap(X, y=None):
 # ─────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/backend')
-
     from data_loader      import veri_yukle
     from pipeline_builder import veri_hazirla
 

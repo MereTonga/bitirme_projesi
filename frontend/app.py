@@ -1,6 +1,3 @@
-import sys
-sys.path.insert(0, '/home/mertunix/workspace/proje_bitirme/frontend')
-
 import streamlit as st
 from api_client import saglik_kontrol
 

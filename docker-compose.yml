@@ -1,0 +1,62 @@
+# Su Kalitesi Siniflandirma — Docker Compose
+# Iki servis: backend (FastAPI + GPU PyTorch) ve frontend (Streamlit).
+# Volume'lar host dosya sistemiyle eslestirildi:
+#   ./data            -> CSV veri seti (read-only mantikli)
+#   ./database        -> SQLite veritabani (persistent)
+#   ./backend/garage  -> Egitilmis ML/DL modelleri (persistent)
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: su-kalitesi-backend:latest
+    container_name: su_kalitesi_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./database:/app/database
+      - ./backend/garage:/app/backend/garage
+    environment:
+      - PYTHONUNBUFFERED=1
+      # NVIDIA / PyTorch
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - bitirme-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: su-kalitesi-frontend:latest
+    container_name: su_kalitesi_frontend
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      # Frontend EDA sayfasi backend.data_loader uzerinden CSV okuyor
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      # api_client.py bu env var ile backend servisine baglanir
+      - API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bitirme-net
+
+networks:
+  bitirme-net:
+    driver: bridge
+    name: bitirme-net
