@@ -1,0 +1,35 @@
+name: proje
+
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # 🔥 GPU stack (en kritik)
+  - pytorch=2.2
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+
+  # 🔧 bilimsel stack
+  - numpy=1.26
+  - pandas=2.2
+  - scipy
+  - scikit-learn
+  - matplotlib
+
+  # ⚡ diğerleri pip'ten
+  - pip:
+      - fastapi==0.115.12
+      - uvicorn==0.43.0
+      - streamlit==1.44.1
+      - xgboost==2.1.4
+      - lightgbm==4.6.0
+      - shap==0.51.0
+      - optuna==4.8.0
+      - sqlalchemy==2.0.49
