@@ -1,6 +1,3 @@
-# Veri seti
-data/
-
 # Eğitilen modeller
 backend/garage/
 
@@ -15,6 +12,7 @@ __pycache__/
 # Ortam dosyaları
 .env
 *.env
+!.env.example
 
 # IDE
 .vscode/
@@ -25,5 +23,3 @@ __pycache__/
 
 # Veritabanı
 database/*.db
-
-Önerilen_Geliştirmeler.txt
