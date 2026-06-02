@@ -9,7 +9,7 @@ ml_modeller = [m for m in liste if m['model_turu'] == 'ml']
 dl_modeller = [m for m in liste if m['model_turu'] == 'dl']
 
 print('=' * 60)
-print('GARAGE DURUMU')
+print('GARAGE DURUMU' + " (Model Sayısı: " + str(len(liste)) + ")")
 print('=' * 60)
 for model in ml_modeller:
     print(f'  Model adı   : {model["dosya_adi"]}')
