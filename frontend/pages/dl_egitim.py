@@ -41,7 +41,7 @@ def mimari_gorsellestir(gizli_katmanlar, dropout_orani, batch_norm):
             y0         = 0,
             x1         = x_pozisyonlar[i + 1],
             y1         = 0,
-            line       = dict(color='#CBD5E1', width=2)
+            line       = dict(color="#8A929C", width=2)
         )
 
     # Katman düğümleri
@@ -55,7 +55,7 @@ def mimari_gorsellestir(gizli_katmanlar, dropout_orani, batch_norm):
         zip(tum_katmanlar, katman_isimleri, renkler)
     ):
         # Daire boyutu nöron sayısına göre ölçekli
-        olcek = min(50 + boyut * 0.3, 80)
+        olcek = min(45 + boyut * 0.5, 135)
         fig.add_trace(go.Scatter(
             x            = [x_pozisyonlar[i]],
             y            = [0],
@@ -63,7 +63,7 @@ def mimari_gorsellestir(gizli_katmanlar, dropout_orani, batch_norm):
             marker       = dict(size=olcek, color=renk, opacity=0.85),
             text         = [isim],
             textposition = 'top center',
-            textfont     = dict(size=11),
+            textfont     = dict(size=14,color='black'),
             hovertemplate= f'<b>{isim}</b><br>Nöron: {boyut}<extra></extra>',
             showlegend   = False
         ))
@@ -80,14 +80,14 @@ def mimari_gorsellestir(gizli_katmanlar, dropout_orani, batch_norm):
 
             fig.add_annotation(
                 x         = x_pozisyonlar[i],
-                y         = -0.18,
+                y         = -0.24,
                 text      = etiket,
                 showarrow = False,
-                font      = dict(size=9, color='#64748B')
+                font      = dict(size=12, color='black')
             )
 
     fig.update_layout(
-        height      = 300,
+        height      = 335,
         showlegend  = False,
         xaxis       = dict(visible=False),
         yaxis       = dict(visible=False, range=[-0.4, 0.5]),
@@ -120,7 +120,7 @@ def egitim_egrisi_goster(gecmis):
         rows             = 2,
         cols             = 1,
         subplot_titles   = ('Loss Eğrisi', 'Accuracy Eğrisi'),
-        vertical_spacing = 0.12
+        vertical_spacing = 0.2
     )
 
     # Loss
@@ -166,22 +166,28 @@ def egitim_egrisi_goster(gecmis):
             )
 
     fig.update_layout(
-        height      = 500,
+        height      = 600,
         showlegend  = True,
+        xaxis_title   = dict(text='Epoch', font=dict(size=14,color='black')),
+        xaxis2_title  = dict(text='Epoch', font=dict(size=14,color='black')),
+        yaxis_title   = dict(text='Loss',  font=dict(size=14,color='black')),
+        yaxis2_title  = dict(text='Accuracy', font=dict(size=14,color='black')),
         legend      = dict(
             orientation = 'h',
             yanchor     = 'bottom',
             y           = 1.02,
             xanchor     = 'right',
-            x           = 1
+            x           = 1,
+            font        = dict(size=14,color='black')
         ),
         plot_bgcolor  = 'white',
-        paper_bgcolor = 'white'
+        paper_bgcolor = 'white',
+        font         = dict(size=14,color='black'),
     )
-    fig.update_xaxes(title_text='Epoch', gridcolor='#F3F4F6')
-    fig.update_yaxes(gridcolor='#F3F4F6')
-    fig.update_yaxes(title_text='Loss',     row=1, col=1)
-    fig.update_yaxes(title_text='Accuracy', row=2, col=1)
+    fig.update_xaxes(title_text='Epoch', gridcolor='#F3F4F6',tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(gridcolor='#F3F4F6',tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(title_text='Loss',     row=1, col=1,tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(title_text='Accuracy', row=2, col=1,tickfont=dict(size=14,color='black'))
 
     return fig
 

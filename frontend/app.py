@@ -76,7 +76,7 @@ except Exception:
 sekme1, sekme2, sekme3, sekme4, sekme5 = st.tabs([
     '📊 Veri & EDA',
     '⚙️ Preprocessing',
-    '🤖 ML ',
+    '🤖 ML Modelleri',
     '🧠 Derin Öğrenme',
     '🏆 Model Garajı'
 ])
