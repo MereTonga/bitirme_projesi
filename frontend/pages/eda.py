@@ -99,11 +99,12 @@ def goster():
             labels  = ['İçilemez (0)', 'İçilebilir (1)'],
             values  = [dagilim[0], dagilim[1]],
             marker_colors = [RENKLER['hata'], RENKLER['ikincil']],
-            hole    = 0.4,
-            textinfo= 'label+percent'
+            hole    = 0.15,
+            textinfo= 'label+percent',
+            textfont = dict(size=22, color='white')
         ))
         fig.update_layout(
-            height      = 280,
+            height      = 375,
             showlegend  = False,
             margin      = dict(t=20, b=20, l=20, r=20)
         )
@@ -176,7 +177,7 @@ def goster():
             color_discrete_sequence = [RENKLER['birincil']],
             title   = f'{secili_ozellik} — Genel Dağılım'
         )
-        fig1.update_layout(height=300, showlegend=False)
+        fig1.update_layout(height=650, showlegend=False)
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
@@ -194,7 +195,7 @@ def goster():
             title   = f'{secili_ozellik} — Potability\'e Göre'
         )
         fig2.update_traces(opacity=0.7)
-        fig2.update_layout(height=300)
+        fig2.update_layout(height=650)
         st.plotly_chart(fig2, use_container_width=True)
 
     st.divider()
@@ -204,23 +205,28 @@ def goster():
 
     outlier_ozet, outlier_karsilastirma = outlier_analiz_cache()
 
+    secili_box_ozellik = st.selectbox(
+        'Box plot için özellik seçin:',
+        OZELLIK_KOLONLARI,
+        key='boxplot_secim'
+    )
+
     fig3 = go.Figure()
-    for ozellik in OZELLIK_KOLONLARI:
-        for potability, renk, isim in [
-            (0, RENKLER['hata'],    'İçilemez'),
-            (1, RENKLER['ikincil'], 'İçilebilir')
-        ]:
-            fig3.add_trace(go.Box(
-                y           = df[df['Potability'] == potability][ozellik],
-                name        = f'{ozellik}<br>{isim}',
-                marker_color= renk,
-                showlegend  = False,
-                boxmean     = True
-            ))
+    for potability, renk, isim in [
+        (0, RENKLER['hata'],    'İçilemez'),
+        (1, RENKLER['ikincil'], 'İçilebilir')
+    ]:
+        fig3.add_trace(go.Box(
+            y           = df[df['Potability'] == potability][secili_box_ozellik],
+            name        = f'{secili_box_ozellik}<br>{isim}',
+            marker_color= renk,
+            showlegend  = False,
+            boxmean     = True
+        ))
 
     fig3.update_layout(
-        height  = 450,
-        title   = 'Tüm Özellikler Box Plot (Kırmızı=İçilemez, Yeşil=İçilebilir)',
+        height  = 750,
+        title   = f'{secili_box_ozellik} Box Plot (Kırmızı=İçilemez, Yeşil=İçilebilir)',
         xaxis_tickangle = -45
     )
     st.plotly_chart(fig3, use_container_width=True)
@@ -249,13 +255,18 @@ def goster():
         zmin    = -1,
         zmax    = 1,
         title   = 'Pearson Korelasyon Matrisi',
-        text_auto = '.2f'
+        text_auto = '.2f',
+        aspect  = 'auto'
     )
-    fig4.update_layout(height=500)
+    fig4.update_layout(
+        height=850,
+        margin=dict(t=60, b=30, l=30, r=30),
+        font=dict(size=18,color='black')
+    )
     st.plotly_chart(fig4, use_container_width=True)
 
     st.info(
         '**Gözlem:** Hiçbir özellik Potability ile güçlü '
         'korelasyon göstermiyor (max ~0.03). Bu veri seti '
-        'için doğrusal modeller sınırlı başarı gösterebilir.'
+        'için doğrusal modeller sınırlı başarı gösterebilir.',
     )
