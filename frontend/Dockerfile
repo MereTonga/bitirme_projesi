@@ -46,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8501/_stcore/health || exit 1
 
 WORKDIR /app/frontend
-CMD ["streamlit", "run", "app.py"]
+CMD ["streamlit", "run", "app.py", "--server.runOnSave=true"]

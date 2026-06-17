@@ -16,6 +16,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app/backend
       - ./data:/app/data
       - ./database:/app/database
       - ./backend/garage:/app/backend/garage
@@ -45,6 +46,8 @@ services:
       - "8501:8501"
     volumes:
       # Frontend EDA sayfasi backend.data_loader uzerinden CSV okuyor
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
