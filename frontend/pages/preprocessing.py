@@ -193,7 +193,7 @@ def goster():
             fig.update_layout(
                 title       = 'Eksik Değer Sayısı — Önce/Sonra',
                 barmode     = 'group',
-                height      = 300,
+                height      = 650,
                 yaxis_title = 'Eksik Sayısı'
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -230,7 +230,7 @@ def goster():
                     name         = 'Sonra'
                 ), row=1, col=2
             )
-            fig2.update_layout(height=280, showlegend=False)
+            fig2.update_layout(height=560, showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
 
         # ── Tab 3: Dengesizlik ─────────────────────────────────
@@ -277,7 +277,7 @@ def goster():
                     showlegend   = False
                 ), row=1, col=col_idx)
 
-            fig3.update_layout(height=300)
+            fig3.update_layout(height=600)
             st.plotly_chart(fig3, use_container_width=True)
 
             tablo_df = pd.DataFrame([
