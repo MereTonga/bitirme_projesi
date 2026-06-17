@@ -154,7 +154,7 @@ def confusion_matrix_goster(conf_matrix):
         z, x=x, y=y, colorscale='Blues', showscale=True,
         annotation_text=[[str(z[i][j]) for j in range(2)] for i in range(2)]
     )
-    fig.update_layout(title='Confusion Matrix', height=350)
+    fig.update_layout(title='Confusion Matrix', height=550, font=dict(size=16))
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -192,11 +192,11 @@ def trial_grafigi(trial_gecmisi, model_adi):
                 for a in auc_deger
             ],
             size  = [
-                12 if a == max(auc_deger) else 7
+                16 if a == max(auc_deger) else 10
                 for a in auc_deger
             ]
         ),
-        line = dict(color=RENKLER['birincil'], width=1.5, dash='dot')
+        line = dict(color=RENKLER['birincil'], width=2, dash='dot')
     ))
 
     # Kümülatif en iyi
@@ -217,12 +217,12 @@ def trial_grafigi(trial_gecmisi, model_adi):
         showarrow = True,
         arrowhead = 2,
         arrowcolor= RENKLER['mor'],
-        font      = dict(color=RENKLER['mor'], size=11)
+        font      = dict(color=RENKLER['mor'], size=15)
     )
 
     fig.update_layout(
         title       = f'{MODELLER.get(model_adi, model_adi)} — Optuna Trial Geçmişi',
-        height      = 350,
+        height      = 650,
         xaxis_title = 'Trial No',
         yaxis_title = 'ROC-AUC',
         plot_bgcolor= 'white',

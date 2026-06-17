@@ -259,7 +259,7 @@ def goster():
         aspect  = 'auto'
     )
     fig4.update_layout(
-        height=850,
+        height=750,
         margin=dict(t=60, b=30, l=30, r=30),
         font=dict(size=18,color='black')
     )

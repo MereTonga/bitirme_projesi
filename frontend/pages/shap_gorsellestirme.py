@@ -69,16 +69,19 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
     ))
 
     fig.update_layout(
-        title       = dict(text=baslik, x=0.5, font=dict(size=14)),
+        title       = dict(text=baslik, x=0.5, font=dict(size=14, color='black')),
         height      = 420,
-        xaxis_title = 'Özellik (değer)',
-        yaxis_title = 'SHAP Katkısı',
+        xaxis_title = dict(text='Özellik (değer)', font=dict(color='black')),
+        yaxis_title = dict(text='SHAP Katkısı', font=dict(color='black')),
         plot_bgcolor= 'white',
         paper_bgcolor='white',
         showlegend  = False,
         xaxis_tickangle = -30,
+        font        = dict(color='black'),
         margin      = dict(t=80, b=100)
     )
+    fig.update_xaxes(tickfont=dict(color='black'))
+    fig.update_yaxes(tickfont=dict(color='black'))
     fig.update_yaxes(gridcolor='#F3F4F6', zeroline=True,
                      zerolinecolor='#CBD5E1', zerolinewidth=1.5)
 
@@ -141,15 +144,17 @@ def ozet_bar_plot(ozet_veri, baslik='SHAP Özellik Önemi'):
     ))
 
     fig.update_layout(
-        title       = dict(text=baslik, x=0.5, font=dict(size=14)),
-        height      = 400,
-        xaxis_title = 'Ortalama |SHAP Değeri|',
+        title       = dict(text=baslik, x=0.5, font=dict(size=16, color='black')),
+        height      = 550,
+        xaxis_title = dict(text='Ortalama |SHAP Değeri|', font=dict(color='black')),
         plot_bgcolor= 'white',
-        paper_bgcolor='white',
+        paper_bgcolor= "white",
         showlegend  = False,
+        font        = dict(color='black'),
         margin      = dict(l=20, r=80, t=60, b=40)
     )
-    fig.update_xaxes(gridcolor='#F3F4F6')
+    fig.update_xaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
+    fig.update_yaxes(tickfont=dict(color='black'))
 
     return fig
 
@@ -204,18 +209,19 @@ def shap_scatter_plot(ozet_veri, baslik='SHAP Dağılım'):
         ))
 
     fig.update_layout(
-        title       = dict(text=baslik, x=0.5, font=dict(size=14)),
+        title       = dict(text=baslik, x=0.5, font=dict(size=14, color='black')),
         height      = 450,
-        xaxis_title = 'SHAP Değeri',
+        xaxis_title = dict(text='SHAP Değeri', font=dict(color='black')),
         plot_bgcolor= 'white',
         paper_bgcolor='white',
-        showlegend  = False
+        showlegend  = False,
+        font        = dict(color='black')
     )
     fig.add_vline(
         x=0, line_dash='dash',
         line_color='#CBD5E1', line_width=1.5
     )
-    fig.update_xaxes(gridcolor='#F3F4F6')
-    fig.update_yaxes(gridcolor='#F3F4F6')
+    fig.update_xaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
+    fig.update_yaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
 
     return fig
