@@ -43,7 +43,7 @@ def egitim_egrisi_goster(gecmis):
     fig = make_subplots(
         rows=2, cols=1,
         subplot_titles=('Loss Eğrisi', 'Accuracy Eğrisi'),
-        vertical_spacing=0.12
+        vertical_spacing=0.2
     )
     fig.add_trace(go.Scatter(
         x=epoch_list, y=train_loss, mode='lines',
@@ -72,14 +72,26 @@ def egitim_egrisi_goster(gecmis):
                 annotation_position='top right'
             )
     fig.update_layout(
-        height=420, showlegend=True,
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        plot_bgcolor='white', paper_bgcolor='white'
+        height=600,
+        showlegend=True,
+        plot_bgcolor='white', paper_bgcolor='white',
+        xaxis_title   = dict(text='Epoch', font=dict(size=14,color='black')),
+        xaxis2_title  = dict(text='Epoch', font=dict(size=14,color='black')),
+        yaxis_title   = dict(text='Loss',  font=dict(size=14,color='black')),
+        yaxis2_title  = dict(text='Accuracy', font=dict(size=14,color='black')),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02, xanchor='right',
+            x=1,
+            font = dict(size=14,color='black')
+        ),
+        font = dict(size=14,color='black'),
     )
-    fig.update_xaxes(title_text='Epoch', gridcolor='#F3F4F6')
-    fig.update_yaxes(gridcolor='#F3F4F6')
-    fig.update_yaxes(title_text='Loss',     row=1, col=1)
-    fig.update_yaxes(title_text='Accuracy', row=2, col=1)
+    fig.update_xaxes(title_text='Epoch', gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(gridcolor='#A0A0A0',tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(title_text='Loss', row=1, col=1,tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(title_text='Accuracy', row=2, col=1,tickfont=dict(size=14,color='black'))
     return fig
 
 
@@ -190,7 +202,7 @@ def goster():
             goster_df.style.highlight_max(
                 subset = [c for c in ['Accuracy','F1','ROC-AUC']
                           if c in goster_df.columns],
-                color  = '#D1FAE5',
+                color  = '#0baa76',
                 axis   = 0
             ).format({
                 'Accuracy': '{:.4f}',
@@ -219,7 +231,8 @@ def goster():
                 textposition = 'outside'
             ))
             fig_bar.update_layout(
-                height      = max(300, len(tablo_df) * 35),
+                height      = max(300, len(tablo_df) * 45),
+                font        = dict(color='black'),
                 xaxis_range = [0.4, 1.0],
                 xaxis_title = 'ROC-AUC',
                 plot_bgcolor= 'white',
@@ -510,7 +523,7 @@ def goster():
             ))
             fig_trend.update_layout(
                 barmode     = 'stack',
-                height      = 300,
+                height      = 475,
                 xaxis_title = 'Tarih',
                 yaxis_title = 'Tahmin Sayısı',
                 plot_bgcolor= 'white',
@@ -770,11 +783,12 @@ def _toplu_tahmin_sekmesi(tum_modeller):
                 RENKLER['ikincil'],
                 RENKLER['hata']
             ],
-            hole         = 0.4,
-            textinfo     = 'label+percent'
+            hole         = 0.15,
+            textinfo     = 'label+percent',
+            textfont = dict(size=22, color='white')
         ))
         fig_pasta.update_layout(
-            height     = 280,
+            height     = 325,
             showlegend = False,
             margin     = dict(t=20, b=20, l=10, r=10)
         )
@@ -817,9 +831,9 @@ def _toplu_tahmin_sekmesi(tum_modeller):
     # Renklendirme
     def satir_rengi(satir):
         if satir.get('Tahmin') == 'İçilebilir':
-            return ['background-color: #D1FAE5'] * len(satir)
+            return ['background-color: #0baa76'] * len(satir)
         elif satir.get('Tahmin') == 'İçilemez':
-            return ['background-color: #FEE2E2'] * len(satir)
+            return ['background-color: #af3030'] * len(satir)
         return [''] * len(satir)
 
     st.dataframe(

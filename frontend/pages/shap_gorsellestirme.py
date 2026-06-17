@@ -32,7 +32,7 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
 
     # Renkleri belirle
     renkler = [
-        RENKLER['pozitif'] if v > 0 else RENKLER['negatif']
+        RENKLER['negatif'] if v > 0 else RENKLER['pozitif']
         for v in shap_vals
     ]
 
@@ -70,7 +70,7 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
 
     fig.update_layout(
         title       = dict(text=baslik, x=0.5, font=dict(size=14, color='black')),
-        height      = 420,
+        height      = 500,
         xaxis_title = dict(text='Özellik (değer)', font=dict(color='black')),
         yaxis_title = dict(text='SHAP Katkısı', font=dict(color='black')),
         plot_bgcolor= 'white',
@@ -93,7 +93,7 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
             '🔴 Kırmızı = İçilemez yönüne itiyor'
         ),
         showarrow=False,
-        font=dict(size=10, color='#64748B'),
+        font=dict(size=12, color='black'),
         align='left'
     )
 

@@ -182,11 +182,11 @@ def egitim_egrisi_goster(gecmis):
         ),
         plot_bgcolor  = 'white',
         paper_bgcolor = 'white',
-        font         = dict(size=14,color='black'),
+        font = dict(size=14,color='black')
     )
-    fig.update_xaxes(title_text='Epoch', gridcolor='#F3F4F6',tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(gridcolor='#F3F4F6',tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(title_text='Loss',     row=1, col=1,tickfont=dict(size=14,color='black'))
+    fig.update_xaxes(title_text='Epoch', gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
+    fig.update_yaxes(title_text='Loss', row=1, col=1,tickfont=dict(size=14,color='black'))
     fig.update_yaxes(title_text='Accuracy', row=2, col=1,tickfont=dict(size=14,color='black'))
 
     return fig
