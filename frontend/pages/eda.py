@@ -227,7 +227,7 @@ def goster():
     fig3.update_layout(
         height  = 750,
         title   = f'{secili_box_ozellik} Box Plot (Kırmızı=İçilemez, Yeşil=İçilebilir)',
-        xaxis_tickangle = -45
+        xaxis_tickangle = 0,
     )
     st.plotly_chart(fig3, use_container_width=True)
 
