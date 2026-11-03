@@ -1,14 +1,5 @@
 import pandas as pd
-import numpy as np
-from data_loader import veri_yukle
-
-
-# Hedef değişken hariç tüm sayısal kolonlar
-SAYISAL_KOLONLAR = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
+from config import OZELLIK_KOLONLARI as SAYISAL_KOLONLAR, HEDEF_KOLON
 
 
 def iqr_sinirlari_hesapla(df):
@@ -96,8 +87,8 @@ def potability_ile_karsilastir(df, sinirlar):
         if len(outlier_satirlar) == 0:
             continue
 
-        icilemeyen = (outlier_satirlar['Potability'] == 0).sum()
-        icilen     = (outlier_satirlar['Potability'] == 1).sum()
+        icilemeyen = (outlier_satirlar[HEDEF_KOLON] == 0).sum()
+        icilen     = (outlier_satirlar[HEDEF_KOLON] == 1).sum()
 
         satirlar.append({
             'Kolon'         : kolon,
@@ -110,42 +101,3 @@ def potability_ile_karsilastir(df, sinirlar):
     return pd.DataFrame(satirlar).sort_values(
         'Toplam Aykırı', ascending=False
     )
-
-
-def outlier_raporu(df):
-    """
-    Terminal için tam outlier raporu basar.
-    """
-    ozet_df, sinirlar = outlier_tespit(df)
-
-    print("=" * 65)
-    print("OUTLIER ANALİZİ — IQR YÖNTEMİ")
-    print("=" * 65)
-    print(ozet_df.to_string(index=False))
-
-    print()
-    print("=" * 65)
-    print("AYKIRI DEĞERLERİN POTABİLİTY DAĞILIMI")
-    print("=" * 65)
-    karsilastirma = potability_ile_karsilastir(df, sinirlar)
-    print(karsilastirma.to_string(index=False))
-
-    print()
-    print("=" * 65)
-    print("YORUM")
-    print("=" * 65)
-    yuksek_outlier = ozet_df[ozet_df['Oran %'] > 5]
-    if yuksek_outlier.empty:
-        print("Hiçbir kolonda %5'i aşan outlier yok.")
-        print(">> Öneri: Outlier silme işlemi gerekmeyebilir.")
-    else:
-        kolonlar = ', '.join(yuksek_outlier['Kolon'].tolist())
-        print(f"Yüksek outlier oranı olan kolonlar: {kolonlar}")
-        print(">> Öneri: Bu kolonlar için outlier kararı gerekiyor.")
-
-    return ozet_df, sinirlar
-
-
-if __name__ == "__main__":
-    df = veri_yukle()
-    outlier_raporu(df)

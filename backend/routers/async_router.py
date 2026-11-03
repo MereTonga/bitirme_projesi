@@ -1,4 +1,3 @@
-import time
 import numpy as np
 from fastapi           import APIRouter, BackgroundTasks, HTTPException
 from typing            import Optional
@@ -379,13 +378,12 @@ def _dl_egit_arkaplanda(job_id: str, istek_dict: dict):
         import numpy as np
         from data_loader             import veri_yukle
         from pipeline_builder        import veri_hazirla
-        from dl.trainer              import model_egit, EarlyStopping
+        from dl.trainer              import model_egit
         from dl.dl_garage            import ann_kaydet, ann_tahmin
         from dl.egitim_grafigi       import egitim_ozeti
         from sklearn.metrics         import (
             accuracy_score, f1_score, roc_auc_score
         )
-        from schemas.ml_schemas      import PreprocessingAyarlari
 
         pre = istek_dict.get('preprocessing', {})
 

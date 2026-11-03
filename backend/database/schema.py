@@ -137,30 +137,3 @@ def veritabani_istatistik():
         'boyut_kb'      : round(boyut, 2),
         'db_yolu'       : DB_YOLU
     }
-
-
-# ─────────────────────────────────────────
-# TEST
-# ─────────────────────────────────────────
-
-if __name__ == '__main__':
-    print('Veritabanı oluşturuluyor...')
-    veritabani_olustur()
-
-    print()
-    print('İstatistikler:')
-    istatistik = veritabani_istatistik()
-    for k, v in istatistik.items():
-        print(f'  {k:<20}: {v}')
-
-    print()
-    print('Tablo listesi:')
-    with db_baglanti() as cursor:
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
-        for satir in cursor.fetchall():
-            print(f'  {satir[0]}')
-
-    print()
-    print('Veritabanı başarıyla oluşturuldu.')

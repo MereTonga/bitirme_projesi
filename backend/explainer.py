@@ -1,12 +1,6 @@
 import numpy as np
-import pandas as pd
 import shap
-
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
+from config import OZELLIK_KOLONLARI
 
 # Tree-based modeller için TreeExplainer kullanılır
 # Diğerleri için KernelExplainer (daha yavaş ama evrensel)
@@ -257,63 +251,3 @@ def ann_shap(model, X_train_ornekler, X_ornek, device):
         'ozellik_isimleri' : OZELLIK_KOLONLARI,
         'ozellik_degerleri': X_ornek[0].tolist()
     }
-
-
-# ─────────────────────────────────────────
-# 6. TEST
-# ─────────────────────────────────────────
-
-if __name__ == '__main__':
-    from data_loader      import veri_yukle
-    from pipeline_builder import veri_hazirla
-    from ml.rf_model      import RandomForestModel
-    from ml.knn_model     import KNNModel
-
-    df = veri_yukle()
-    X_train, X_test, y_train, y_test, pipe, _, _ = veri_hazirla(
-        df, dengesizlik='smote'
-    )
-
-    print('=' * 55)
-    print('EXPLAINER TESTLERİ')
-    print('=' * 55)
-
-    # ── TreeExplainer (Random Forest) ────────────────────────
-    print()
-    print('>> Random Forest — TreeExplainer...')
-    rf = RandomForestModel()
-    rf.egit(X_train, y_train, n_estimators=50)
-
-    exp_rf = explainer_olustur('random_forest', rf.model, X_train)
-    shap_sonuc = tek_ornek_shap(exp_rf, X_test[:1], 'random_forest')
-
-    assert len(shap_sonuc['shap_degerleri']) == 9, 'Hata: SHAP boyutu yanlış!'
-    assert len(shap_sonuc['ozellik_isimleri']) == 9, 'Hata: İsim boyutu yanlış!'
-    print(f'   OK — SHAP değerleri: {len(shap_sonuc["shap_degerleri"])} özellik')
-    print(f'   OK — Beklenen değer: {shap_sonuc["beklenen_deger"]:.4f}')
-
-    # Waterfall verisi
-    wf = waterfall_verisi_hazirla(shap_sonuc)
-    assert len(wf['ozellikler']) == 9, 'Hata: Waterfall boyutu yanlış!'
-    print(f'   OK — En etkili özellik: {wf["ozellikler"][0]}')
-    print(f'   OK — SHAP katkısı    : {wf["shap_vals"][0]:.4f}')
-
-    # Özet SHAP
-    print()
-    print('>> Özet SHAP (200 örnek)...')
-    ozet = ozet_shap(exp_rf, X_test, 'random_forest')
-    assert len(ozet['ortalama_abs_shap']) == 9, 'Hata: Özet boyutu yanlış!'
-    print(f'   OK — Önem sırası: {ozet["onem_sirasi"][:3]}')
-
-    # ── KernelExplainer (KNN) ────────────────────────────────
-    print()
-    print('>> KNN — KernelExplainer (yavaş olabilir)...')
-    knn = KNNModel()
-    knn.egit(X_train, y_train, n_neighbors=5)
-
-    exp_knn = explainer_olustur('knn', knn.model, X_train)
-    shap_knn = tek_ornek_shap(exp_knn, X_test[:1], 'knn')
-    print(f'   OK — SHAP değerleri: {len(shap_knn["shap_degerleri"])} özellik')
-
-    print()
-    print('Tüm explainer testleri başarılı.')

@@ -1,30 +1,16 @@
 import os
 import joblib
-import numpy as np
-import pandas as pd
 
-from sklearn.pipeline    import Pipeline
-from sklearn.impute      import SimpleImputer, KNNImputer
-from sklearn.preprocessing import (
-    RobustScaler, StandardScaler, MinMaxScaler
+from sklearn.pipeline        import Pipeline
+from sklearn.impute          import SimpleImputer, KNNImputer
+from sklearn.preprocessing   import RobustScaler, StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+
+from balancer import smote_uygula, class_weight_hesapla
+from config   import (
+    GARAGE_YOLU, OZELLIK_KOLONLARI, HEDEF_KOLON,
+    RANDOM_STATE, TEST_ORAN
 )
-
-from balancer import veri_bol, smote_uygula, class_weight_hesapla
-
-# Pipeline kayıt klasörü
-GARAGE_YOLU = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'garage'
-)
-
-# Özellik kolonları
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
-
-EKSIK_KOLONLAR = ['ph', 'Sulfate', 'Trihalomethanes']
 
 
 # ─────────────────────────────────────────
@@ -109,8 +95,8 @@ def veri_hazirla(
     scaler_yontem    = 'robust',
     dengesizlik      = 'smote',
     knn_k            = 5,
-    test_oran        = 0.2,
-    random_state     = 42
+    test_oran        = TEST_ORAN,
+    random_state     = RANDOM_STATE
 ):
     """
     Ham veri setinden modele hazır train/test verisi üretir.
@@ -140,9 +126,8 @@ def veri_hazirla(
 
     # 1. Split — pipeline fit'ten ÖNCE
     X = df[OZELLIK_KOLONLARI]
-    y = df['Potability']
+    y = df[HEDEF_KOLON]
 
-    from sklearn.model_selection import train_test_split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
         test_size    = test_oran,
@@ -216,55 +201,3 @@ def pipeline_yukle(dosya_adi='preprocessing_pipeline.pkl'):
             f"Pipeline bulunamadı: {tam_yol}"
         )
     return joblib.load(tam_yol)
-
-
-# ─────────────────────────────────────────
-# 6. TEST
-# ─────────────────────────────────────────
-
-if __name__ == "__main__":
-    from data_loader import veri_yukle
-
-    df = veri_yukle()
-
-    print("=" * 55)
-    print("PİPELINE TESTİ — SMOTE")
-    print("=" * 55)
-    X_train, X_test, y_train, y_test, pipe, cw, pw = veri_hazirla(
-        df,
-        imputer_yontem = 'median',
-        scaler_yontem  = 'robust',
-        dengesizlik    = 'smote'
-    )
-    print(f"X_train : {X_train.shape}")
-    print(f"X_test  : {X_test.shape}")
-    print(f"y_train — 0: {(y_train==0).sum()} | 1: {(y_train==1).sum()}")
-    print(f"y_test  — 0: {(y_test==0).sum()}  | 1: {(y_test==1).sum()}")
-    print(f"Class weights : {cw}")
-    print(f"Pos weight    : {pw}")
-
-    print()
-    print("=" * 55)
-    print("PİPELINE TESTİ — CLASS WEIGHT")
-    print("=" * 55)
-    X_train2, X_test2, y_train2, y_test2, pipe2, cw2, pw2 = veri_hazirla(
-        df,
-        imputer_yontem = 'median',
-        scaler_yontem  = 'robust',
-        dengesizlik    = 'class_weight'
-    )
-    print(f"X_train : {X_train2.shape}")
-    print(f"Class weights : {cw2}")
-    print(f"Pos weight    : {pw2}")
-
-    print()
-    print("=" * 55)
-    print("PİPELINE KAYDET / YÜKLE TESTİ")
-    print("=" * 55)
-    kayit_yolu = pipeline_kaydet(pipe)
-    pipe_yuklu = pipeline_yukle()
-    print(f"Pipeline adımları: {[s[0] for s in pipe_yuklu.steps]}")
-    print("Kaydet/Yükle başarılı.")
-
-    print()
-    print("Tüm testler başarılı.")

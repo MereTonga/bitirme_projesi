@@ -1,7 +1,6 @@
 import copy
 import torch
 import torch.nn as nn
-import numpy as np
 from dl.ann_model import DinamikANN
 from dl.dataset   import dataloader_olustur
 
@@ -316,85 +315,3 @@ def model_egit(
             gecmis['en_iyi_epoch'] = es.en_iyi_epoch
 
     return model, gecmis, device
-
-
-# ─────────────────────────────────────────
-# 6. TEST
-# ─────────────────────────────────────────
-
-if __name__ == "__main__":
-    import time
-    from data_loader      import veri_yukle
-    from pipeline_builder import veri_hazirla
-
-    df = veri_yukle()
-    X_train, X_test, y_train, y_test, pipe, _, pw = veri_hazirla(
-        df, dengesizlik='class_weight'
-    )
-
-    # Train/Val split
-    val_boyut = int(len(X_train) * 0.2)
-    X_val     = X_train[:val_boyut]
-    y_val     = y_train[:val_boyut]
-    X_tr      = X_train[val_boyut:]
-    y_tr      = y_train[val_boyut:]
-
-    print("=" * 60)
-    print("TEST 1: Early Stopping AÇIK (patience=10)")
-    print("=" * 60)
-    baslangic = time.time()
-    model, gecmis, device = model_egit(
-        X_tr, y_tr,
-        X_val           = X_val,
-        y_val           = y_val,
-        gizli_katmanlar = [64, 32],
-        learning_rate   = 0.001,
-        epochs          = 100,
-        batch_size      = 32,
-        pos_weight      = pw,
-        early_stopping  = True,
-        patience        = 10
-    )
-    sure = round(time.time() - baslangic, 2)
-
-    print()
-    print(f"  Toplam süre      : {sure} saniye")
-    print(f"  Çalışan epoch    : {len(gecmis['train_loss'])}")
-    print(f"  En iyi epoch     : {gecmis['en_iyi_epoch']}")
-    print(f"  Erken durduruldu : {gecmis['durduruldu']}")
-    print(f"  Son val loss     : {gecmis['val_loss'][-1]}")
-    print(f"  Son val acc      : {gecmis['val_acc'][-1]}")
-
-    print()
-    print("=" * 60)
-    print("TEST 2: Early Stopping KAPALI (tüm epoch'lar)")
-    print("=" * 60)
-    model2, gecmis2, _ = model_egit(
-        X_tr, y_tr,
-        X_val           = X_val,
-        y_val           = y_val,
-        gizli_katmanlar = [64, 32],
-        learning_rate   = 0.001,
-        epochs          = 30,
-        early_stopping  = False
-    )
-    print(f"\n  Çalışan epoch    : {len(gecmis2['train_loss'])}")
-    print(f"  Erken durduruldu : {gecmis2['durduruldu']}")
-
-    print()
-    print("=" * 60)
-    print("EARLY STOPPING SINIF TESTİ")
-    print("=" * 60)
-    es = EarlyStopping(patience=3, min_delta=0.001)
-    import torch.nn as nn
-    test_model = nn.Linear(2, 1)
-    kayitlar = [0.5, 0.4, 0.39, 0.39, 0.39, 0.39]
-    for i, loss in enumerate(kayitlar):
-        durdu = es.adim(loss, test_model, i+1)
-        print(f"  Epoch {i+1}: loss={loss} | sayac={es.bekleme_sayaci} | durdu={durdu}")
-
-    assert es.durduruldu_mu, 'Hata: Early stopping tetiklenmedi!'
-    print('  OK — Early stopping doğru çalışıyor.')
-
-    print()
-    print("Tüm testler başarılı.")

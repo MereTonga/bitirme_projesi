@@ -1,5 +1,3 @@
-import os
-import json
 import numpy as np
 import pandas as pd
 from fastapi  import APIRouter, HTTPException
@@ -13,7 +11,8 @@ from garage_manager  import (
     model_sil, karsilastirma_tablosu,
     ann_yukle_ve_tahmin
 )
-from pipeline_builder import pipeline_yukle, OZELLIK_KOLONLARI
+from pipeline_builder import pipeline_yukle
+from config           import OZELLIK_KOLONLARI
 from dl.egitim_grafigi import gecmis_yukle
 
 router = APIRouter()
@@ -482,12 +481,6 @@ def toplu_tahmin(istek: dict):
         )
 
     # Toplu işlem
-    OZELLIK_KOLONLARI = [
-        'ph', 'Hardness', 'Solids', 'Chloramines',
-        'Sulfate', 'Conductivity', 'Organic_carbon',
-        'Trihalomethanes', 'Turbidity'
-    ]
-
     sonuclar     = []
     basarili     = 0
     hatali       = 0

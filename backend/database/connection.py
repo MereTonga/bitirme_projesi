@@ -1,19 +1,7 @@
 import os
 import sqlite3
 from contextlib import contextmanager
-
-# Veritabanı dosyasının yolu
-DB_YOLU = os.path.join(
-    os.path.dirname(  # backend/database/
-        os.path.dirname(  # backend/
-            os.path.dirname(  # proje_bitirme/
-                os.path.abspath(__file__)
-            )
-        )
-    ),
-    'database',
-    'su_kalitesi.db'
-)
+from config import DB_YOLU
 
 
 def baglanti_al():
@@ -48,11 +36,6 @@ def db_baglanti():
         raise e
     finally:
         baglanti.close()
-
-
-def db_yolu_goster():
-    """Veritabanı dosyasının tam yolunu döndürür."""
-    return DB_YOLU
 
 
 def db_var_mi():

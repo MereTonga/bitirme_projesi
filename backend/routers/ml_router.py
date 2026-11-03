@@ -1,5 +1,4 @@
 from fastapi  import APIRouter, HTTPException
-from typing   import Literal
 
 from schemas.ml_schemas import (
     LogisticRegressionIstek, NaiveBayesIstek,

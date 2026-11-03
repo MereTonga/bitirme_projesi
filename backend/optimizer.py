@@ -1,15 +1,9 @@
 import optuna
-import numpy as np
 from sklearn.metrics import roc_auc_score
+from config import RANDOM_STATE
 
 # Optuna log'larını kapat — sadece sonuçlar görünsün
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
 
 
 # ─────────────────────────────────────────
@@ -164,7 +158,7 @@ def model_olustur(model_adi, params):
     """
     if model_adi == 'logistic_regression':
         from sklearn.linear_model import LogisticRegression
-        return LogisticRegression(random_state=42, **params)
+        return LogisticRegression(random_state=RANDOM_STATE, **params)
 
     elif model_adi == 'naive_bayes':
         from sklearn.naive_bayes import GaussianNB
@@ -176,29 +170,29 @@ def model_olustur(model_adi, params):
 
     elif model_adi == 'decision_tree':
         from sklearn.tree import DecisionTreeClassifier
-        return DecisionTreeClassifier(random_state=42, **params)
+        return DecisionTreeClassifier(random_state=RANDOM_STATE, **params)
 
     elif model_adi == 'random_forest':
         from sklearn.ensemble import RandomForestClassifier
         return RandomForestClassifier(
-            random_state=42, n_jobs=-1, **params
+            random_state=RANDOM_STATE, n_jobs=-1, **params
         )
 
     elif model_adi == 'gradient_boosting':
         from sklearn.ensemble import GradientBoostingClassifier
-        return GradientBoostingClassifier(random_state=42, **params)
+        return GradientBoostingClassifier(random_state=RANDOM_STATE, **params)
 
     elif model_adi == 'xgboost':
         from xgboost import XGBClassifier
         return XGBClassifier(
-            random_state=42, verbosity=0,
+            random_state=RANDOM_STATE, verbosity=0,
             eval_metric='logloss', **params
         )
 
     elif model_adi == 'lightgbm':
         import lightgbm as lgb
         return lgb.LGBMClassifier(
-            random_state=42, verbosity=-1, **params
+            random_state=RANDOM_STATE, verbosity=-1, **params
         )
 
     elif model_adi == 'adaboost':
@@ -207,12 +201,12 @@ def model_olustur(model_adi, params):
         max_depth = params.pop('max_depth', 1)
         temel     = DecisionTreeClassifier(max_depth=max_depth)
         return AdaBoostClassifier(
-            estimator=temel, random_state=42, **params
+            estimator=temel, random_state=RANDOM_STATE, **params
         )
 
     elif model_adi == 'svm':
         from sklearn.svm import SVC
-        return SVC(probability=True, random_state=42, **params)
+        return SVC(probability=True, random_state=RANDOM_STATE, **params)
 
     else:
         raise ValueError(f"Bilinmeyen model: '{model_adi}'")
@@ -296,7 +290,7 @@ def model_optimize_et(
     # Study oluştur ve çalıştır
     study = optuna.create_study(
         direction = 'maximize',
-        sampler   = optuna.samplers.TPESampler(seed=42)
+        sampler   = optuna.samplers.TPESampler(seed=RANDOM_STATE)
     )
     study.optimize(
         objective,
@@ -314,88 +308,3 @@ def model_optimize_et(
         ),
         'toplam_trial' : len(trial_gecmisi)
     }
-
-
-# ─────────────────────────────────────────
-# 4. TEST
-# ─────────────────────────────────────────
-
-if __name__ == '__main__':
-    import time
-    from data_loader      import veri_yukle
-    from pipeline_builder import veri_hazirla
-
-    df = veri_yukle()
-    X_train, X_test, y_train, y_test, pipe, _, _ = veri_hazirla(
-        df, dengesizlik='smote'
-    )
-
-    print('=' * 55)
-    print('OPTİMİZASYON TESTLERİ')
-    print('=' * 55)
-
-    # Tree-based model — hızlı test
-    for model_adi in ['knn', 'random_forest']:
-        print()
-        print(f'>> {model_adi} optimizasyonu (5 trial)...')
-        bas = time.time()
-
-        sonuc = model_optimize_et(
-            model_adi = model_adi,
-            X_train   = X_train,
-            y_train   = y_train,
-            X_test    = X_test,
-            y_test    = y_test,
-            n_trials  = 5
-        )
-        sure = round(time.time() - bas, 2)
-
-        assert sonuc['en_iyi_auc'] > 0,       'Hata: AUC sıfır!'
-        assert len(sonuc['en_iyi_params']) > 0,'Hata: Params boş!'
-        assert sonuc['toplam_trial'] <= 5,     'Hata: Trial sayısı!'
-
-        print(f'   OK — Süre          : {sure}s')
-        print(f'   OK — En iyi AUC   : {sonuc["en_iyi_auc"]}')
-        print(f'   OK — Trial sayısı : {sonuc["toplam_trial"]}')
-        print(f'   OK — En iyi params:')
-        for k, v in sonuc['en_iyi_params'].items():
-            print(f'         {k}: {v}')
-
-        # Trial geçmişi kontrolü
-        assert len(sonuc['trial_gecmisi']) > 0, 'Hata: Geçmiş boş!'
-        en_iyi_trial = max(
-            sonuc['trial_gecmisi'], key=lambda x: x['auc']
-        )
-        print(
-            f'   OK — En iyi trial: '
-            f'#{en_iyi_trial["trial_no"]} '
-            f'(AUC={en_iyi_trial["auc"]})'
-        )
-
-    # Search space kontrolü
-    print()
-    print('>> Tüm modeller için search space kontrolü...')
-    modeller = [
-        'logistic_regression', 'naive_bayes', 'knn',
-        'decision_tree', 'random_forest', 'gradient_boosting',
-        'xgboost', 'lightgbm', 'adaboost', 'svm'
-    ]
-
-    class MockTrial:
-        """Search space'i test etmek için sahte trial."""
-        def suggest_int(self, name, low, high, step=1):
-            return (low + high) // 2
-        def suggest_float(self, name, low, high, log=False):
-            return (low + high) / 2
-        def suggest_categorical(self, name, choices):
-            return choices[0]
-
-    mock_trial = MockTrial()
-    for model in modeller:
-        params = search_space_tanimla(mock_trial, model)
-        model_obj = model_olustur(model, params.copy())
-        assert model_obj is not None, f'Hata: {model} oluşturulamadı!'
-        print(f'   OK — {model:<25} {len(params)} parametre')
-
-    print()
-    print('Tüm optimizasyon testleri başarılı.')

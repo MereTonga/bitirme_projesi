@@ -1,18 +1,6 @@
-import numpy as np
 import pandas as pd
-from sklearn.impute import SimpleImputer, KNNImputer
-from sklearn.preprocessing import RobustScaler, StandardScaler, MinMaxScaler
-
-
-# Eksik veri olan kolonlar
-EKSIK_KOLONLAR = ['ph', 'Sulfate', 'Trihalomethanes']
-
-# Hedef değişken hariç tüm özellik kolonları
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
+from config           import OZELLIK_KOLONLARI, EKSIK_KOLONLAR, HEDEF_KOLON
+from pipeline_builder import imputer_sec, scaler_sec
 
 
 # ─────────────────────────────────────────
@@ -35,15 +23,7 @@ def eksik_veri_doldur(df, yontem='median', knn_k=5):
         imputer : Fit edilmiş imputer objesi (pipeline için)
     """
     df_kopya = df.copy()
-
-    if yontem == 'median':
-        imputer = SimpleImputer(strategy='median')
-    elif yontem == 'knn':
-        imputer = KNNImputer(n_neighbors=knn_k)
-    else:
-        raise ValueError(
-            f"Geçersiz yöntem: '{yontem}'. 'median' veya 'knn' kullanın."
-        )
+    imputer  = imputer_sec(yontem, knn_k)
 
     df_kopya[EKSIK_KOLONLAR] = imputer.fit_transform(
         df_kopya[EKSIK_KOLONLAR]
@@ -73,7 +53,7 @@ def grup_karsilastir(df, hedef_kolon):
 
     diger_kolonlar = [
         k for k in df.columns
-        if k != hedef_kolon and k != 'Potability'
+        if k != hedef_kolon and k != HEDEF_KOLON
     ]
 
     satirlar = []
@@ -141,26 +121,6 @@ def eksik_veri_tam_analiz(df):
 # 3. RAPOR FONKSİYONLARI
 # ─────────────────────────────────────────
 
-def eksik_veri_raporu(df_once, df_sonra, yontem):
-    """
-    Doldurma öncesi ve sonrası karşılaştırma.
-    Streamlit Sekme 2 önizlemesi için kullanılır.
-    """
-    print("=" * 50)
-    print(f"EKSİK VERİ DOLDURMA RAPORU  [{yontem.upper()}]")
-    print("=" * 50)
-    for kolon in EKSIK_KOLONLAR:
-        once  = df_once[kolon].isnull().sum()
-        sonra = df_sonra[kolon].isnull().sum()
-        print(f"{kolon}:")
-        print(f"  Önce  : {once} eksik")
-        print(f"  Sonra : {sonra} eksik")
-        print()
-    print(f"Yöntem: {yontem.upper()} ile tüm eksik değerler dolduruldu.")
-    print("=" * 50)
-    print()
-
-
 def scaling_raporu(df_once, df_sonra):
     """
     Ölçeklendirme öncesi ve sonrası istatistik karşılaştırması.
@@ -187,33 +147,6 @@ def scaling_raporu(df_once, df_sonra):
 # 4. SCALING FONKSİYONLARI
 # ─────────────────────────────────────────
 
-def scaler_olustur(yontem='robust'):
-    """
-    Seçilen yönteme göre scaler oluşturur ve döndürür.
-
-    Parametreler:
-        yontem: 'robust'   → RobustScaler   (varsayılan, önerilen)
-                'standard' → StandardScaler
-                'minmax'   → MinMaxScaler
-
-    Neden robust varsayılan?
-        Outlier analizi sonucunda outlier'ları silmeme
-        kararı aldık. RobustScaler bu değerleri
-        ölçeklendirmeyi bozmadan işler.
-    """
-    if yontem == 'robust':
-        return RobustScaler()
-    elif yontem == 'standard':
-        return StandardScaler()
-    elif yontem == 'minmax':
-        return MinMaxScaler()
-    else:
-        raise ValueError(
-            f"Geçersiz yöntem: '{yontem}'. "
-            "'robust', 'standard' veya 'minmax' kullanın."
-        )
-
-
 def veri_olceklendir(df, yontem='robust'):
     """
     Özellik kolonlarını seçilen yöntemle ölçeklendirir.
@@ -231,85 +164,10 @@ def veri_olceklendir(df, yontem='robust'):
                     (pipeline için saklanacak)
     """
     df_kopya = df.copy()
-    scaler   = scaler_olustur(yontem)
+    scaler   = scaler_sec(yontem)
 
     df_kopya[OZELLIK_KOLONLARI] = scaler.fit_transform(
         df_kopya[OZELLIK_KOLONLARI]
     )
 
     return df_kopya, scaler
-
-
-# ─────────────────────────────────────────
-# 5. TEST
-# ─────────────────────────────────────────
-
-if __name__ == "__main__":
-    from data_loader import veri_yukle
-
-    df = veri_yukle()
-
-    # Eksik veri analiz testi
-    print(">> Eksik veri analizi testi...")
-    sonuclar = eksik_veri_tam_analiz(df)
-    for kolon, bilgi in sonuclar.items():
-        print(f"  {kolon}: {bilgi['sinyal']} ({bilgi['eksik_say']} eksik)")
-
-    # Imputation testi
-    print("\n>> Median imputation testi...")
-    df_median, _ = eksik_veri_doldur(df, yontem='median')
-    eksik_veri_raporu(df, df_median, 'median')
-
-    print(">> KNN imputation testi...")
-    df_knn, _ = eksik_veri_doldur(df, yontem='knn', knn_k=5)
-    eksik_veri_raporu(df, df_knn, 'knn')
-
-    # Scaling testi ve raporu RobustScaler için
-    print(">> RobustScaler testi...")
-    df_robust, _ = veri_olceklendir(df_median, yontem='robust')
-    
-    print()
-    rapor = scaling_raporu(df_median, df_robust)
-    print("Ölçeklendirme Raporu [RobustScaler]:")
-    print(rapor.to_string(index=False))
-    
-    print()
-    print("Potability kolonu korundu mu? [RobustScaler]",
-          'Potability' in df_robust.columns)
-    print("Potability değerleri bozulmadı mı? [RobustScaler]",
-          df_robust['Potability'].isin([0, 1]).all())
-    
-    # Scaling testi ve raporu StandardScaler için
-    print()
-    print(">> StandardScaler testi...")
-    df_std, _    = veri_olceklendir(df_median, yontem='standard')
-    
-    print()
-    rapor = scaling_raporu(df_median, df_std)
-    print("Ölçeklendirme Raporu [StandardScaler]:")
-    print(rapor.to_string(index=False))
-    
-    print()
-    print("Potability kolonu korundu mu? [StandardScaler]",
-          'Potability' in df_std.columns)
-    print("Potability değerleri bozulmadı mı? [StandardScaler]",
-          df_std['Potability'].isin([0, 1]).all())
-
-    # Scaling testi ve raporu MinMaxScaler için
-    print()
-    print(">> MinMaxScaler testi...")
-    df_mm, _     = veri_olceklendir(df_median, yontem='minmax')
-    
-    print()
-    rapor = scaling_raporu(df_median, df_mm)
-    print("Ölçeklendirme Raporu [MinMaxScaler]:")
-    print(rapor.to_string(index=False))
-    
-    print()
-    print("Potability kolonu korundu mu? [MinMaxScaler]",
-          'Potability' in df_mm.columns)
-    print("Potability değerleri bozulmadı mı? [MinMaxScaler]",
-          df_mm['Potability'].isin([0, 1]).all())
-
-    print()
-    print("Tüm testler başarılı.")

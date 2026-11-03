@@ -1,7 +1,6 @@
-import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing   import Optional, List
+from typing   import List
 
 router = APIRouter()
 
@@ -85,12 +84,7 @@ def su_dict_numpy_cevir(su_parametreleri: dict):
     """
     import pandas as pd
     from pipeline_builder import pipeline_yukle
-
-    OZELLIK_KOLONLARI = [
-        'ph', 'Hardness', 'Solids', 'Chloramines',
-        'Sulfate', 'Conductivity', 'Organic_carbon',
-        'Trihalomethanes', 'Turbidity'
-    ]
+    from config           import OZELLIK_KOLONLARI
 
     df_ornek = pd.DataFrame([{
         k: su_parametreleri.get(k) for k in OZELLIK_KOLONLARI
@@ -123,7 +117,7 @@ def tek_ornek_acikla(istek: AciklamaIstek):
             explainer_olustur, tek_ornek_shap,
             waterfall_verisi_hazirla, ann_shap
         )
-        from garage_manager import model_yukle, ann_yukle_ve_tahmin
+        from garage_manager import model_yukle
 
         # Su parametrelerini numpy'a çevir
         X_ornek = su_dict_numpy_cevir(istek.su_parametreleri)

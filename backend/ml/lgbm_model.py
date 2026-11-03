@@ -1,4 +1,3 @@
-import numpy as np
 import lightgbm as lgb
 from ml.base_model import BaseModel
 

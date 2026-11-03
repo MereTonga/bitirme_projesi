@@ -19,9 +19,6 @@ numpy==2.3.5
 pandas==2.3.3
 scipy==1.16.3
 
-# Visualization (eğitim grafikleri için)
-plotly==6.0.1
-
 # Serialization
 joblib==1.5.3
 
