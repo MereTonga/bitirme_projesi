@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi, async_ml_egit, job_durum
+from ui_ortak import RENKLER, preprocessing_paneli
 
 
 # ─────────────────────────────────────────
@@ -35,15 +36,6 @@ TAHMINI_SURE = {
     'adaboost'           : '~25s',
     'svm'                : '~90s'
 }
-
-RENKLER = {
-    'birincil': '#3B82F6',
-    'ikincil' : '#10B981',
-    'uyari'   : '#F59E0B',
-    'hata'    : '#EF4444',
-    'mor'     : '#8B5CF6'
-}
-
 
 # ─────────────────────────────────────────
 # HİPERPARAMETRE PANELİ
@@ -267,32 +259,7 @@ def goster():
     st.divider()
 
     # ── Preprocessing Ayarları ────────────────────────────────
-    with st.expander('⚙️ Preprocessing Ayarları', expanded=False):
-        pc1, pc2, pc3 = st.columns(3)
-        with pc1:
-            pre_imputer = st.selectbox(
-                'Imputer', ['median', 'knn'],
-                index = ['median', 'knn'].index(
-                    st.session_state.get('aktif_imputer', 'median')
-                ),
-                key = 'ml_imputer'
-            )
-        with pc2:
-            pre_scaler = st.selectbox(
-                'Scaler', ['robust', 'standard', 'minmax'],
-                index = ['robust', 'standard', 'minmax'].index(
-                    st.session_state.get('aktif_scaler', 'robust')
-                ),
-                key = 'ml_scaler'
-            )
-        with pc3:
-            pre_denge = st.selectbox(
-                'Dengesizlik', ['smote', 'class_weight', 'none'],
-                index = ['smote', 'class_weight', 'none'].index(
-                    st.session_state.get('aktif_dengesizlik', 'smote')
-                ),
-                key = 'ml_denge'
-            )
+    pre_ayar = preprocessing_paneli('ml')
 
     # ── İki Mod: Manuel ve Otomatik ───────────────────────────
     mod_sec = st.radio(
@@ -326,11 +293,7 @@ def goster():
         if egit_btn:
             payload = {
                 **params,
-                'preprocessing': {
-                    'imputer_yontem': pre_imputer,
-                    'scaler_yontem' : pre_scaler,
-                    'dengesizlik'   : pre_denge
-                }
+                'preprocessing': pre_ayar
             }
             if ozel_isim:
                 payload['ozel_isim'] = ozel_isim
@@ -397,11 +360,7 @@ def goster():
                     model_adi    = model_adi,
                     n_trials     = n_trials,
                     timeout      = timeout,
-                    preprocessing = {
-                        'imputer_yontem': pre_imputer,
-                        'scaler_yontem' : pre_scaler,
-                        'dengesizlik'   : pre_denge
-                    }
+                    preprocessing = pre_ayar
                 )
 
             if 'hata' in opt_sonuc:
@@ -463,11 +422,7 @@ def goster():
             if egit_opt_btn:
                 payload = {
                     **opt['en_iyi_params'],
-                    'preprocessing': {
-                        'imputer_yontem': pre_imputer,
-                        'scaler_yontem' : pre_scaler,
-                        'dengesizlik'   : pre_denge
-                    },
+                    'preprocessing': pre_ayar,
                     'ozel_isim': egit_opt_isim
                 }
 
@@ -524,11 +479,7 @@ def goster():
         if async_btn:
             payload = {
                 **params_async,
-                'preprocessing': {
-                    'imputer_yontem': pre_imputer,
-                    'scaler_yontem' : pre_scaler,
-                    'dengesizlik'   : pre_denge
-                }
+                'preprocessing': pre_ayar
             }
             if ozel_isim:
                 payload['ozel_isim'] = ozel_isim
@@ -553,7 +504,7 @@ def goster():
 
             if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
                 st.markdown('**📊 Canlı İlerleme:**')
-                from pages.job_takip import job_progress_goster
+                from sekmeler.job_takip import job_progress_goster
                 tamamlanan = job_progress_goster(job_id)
                 if tamamlanan and tamamlanan.get('sonuc'):
                     st.session_state['son_ml_sonuc'] = tamamlanan['sonuc']
@@ -633,7 +584,7 @@ def goster():
 
             if st.session_state.get('son_ml_shap_ozet'):
                 ozet = st.session_state['son_ml_shap_ozet']
-                from pages.shap_gorsellestirme import ozet_bar_plot
+                from sekmeler.shap_gorsellestirme import ozet_bar_plot
                 fig = ozet_bar_plot(
                     ozet,
                     baslik=f'{sonuc["model_adi"]} — SHAP Özellik Önemi'

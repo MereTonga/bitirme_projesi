@@ -1,9 +1,8 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
+from ui_ortak import RENKLER, OZELLIK_KOLONLARI
 
 
 # ─────────────────────────────────────────
@@ -30,21 +29,6 @@ def outlier_analiz_cache():
     ozet, sinirlar = outlier_tespit(df)
     karsilastirma  = potability_ile_karsilastir(df, sinirlar)
     return ozet, karsilastirma
-
-
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
-
-RENKLER = {
-    'birincil' : '#3B82F6',
-    'ikincil'  : '#10B981',
-    'uyari'    : '#F59E0B',
-    'hata'     : '#EF4444',
-    'mor'      : '#8B5CF6'
-}
 
 
 # ─────────────────────────────────────────

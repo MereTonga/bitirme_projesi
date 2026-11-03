@@ -160,7 +160,7 @@ print('[5/6] Plotly görselleştirme testleri...')
 FRONTEND_DIR = os.path.join(ROOT_DIR, 'frontend')
 if FRONTEND_DIR not in sys.path:
     sys.path.insert(0, FRONTEND_DIR)
-shap_gorsel_modul = importlib.import_module('pages.shap_gorsellestirme')
+shap_gorsel_modul = importlib.import_module('sekmeler.shap_gorsellestirme')
 waterfall_plot = shap_gorsel_modul.waterfall_plot
 ozet_bar_plot = shap_gorsel_modul.ozet_bar_plot
 shap_scatter_plot = shap_gorsel_modul.shap_scatter_plot
@@ -183,7 +183,7 @@ print('[6/6] Dosya yapısı kontrolü...')
 dosyalar = {
     'backend/explainer.py'                          : 'SHAP modülü',
     'backend/routers/explain_router.py'             : 'SHAP router',
-    'frontend/pages/shap_gorsellestirme.py'         : 'Plotly grafikler',
+    'frontend/sekmeler/shap_gorsellestirme.py'         : 'Plotly grafikler',
 }
 kok = '/home/mertunix/workspace/proje_bitirme'
 for dosya, aciklama in dosyalar.items():

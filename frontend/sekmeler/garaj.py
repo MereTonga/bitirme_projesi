@@ -1,23 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from api_client import (
-    modelleri_listele, modelleri_karsilastir,
+    modelleri_listele,
     model_sil, tahmin_yap, egitim_gecmisi,
     db_modelleri_getir, db_tahminleri_getir,
     db_tahmin_istatistik, db_gunluk_dagilim,
     db_model_istatistik, model_notu_guncelle_api,
     tek_ornek_acikla, toplu_tahmin_yap
 )
-
-RENKLER = {
-    'birincil': '#3B82F6',
-    'ikincil' : '#10B981',
-    'uyari'   : '#F59E0B',
-    'hata'    : '#EF4444',
-    'mor'     : '#8B5CF6'
-}
+from ui_ortak import RENKLER, OZELLIK_KOLONLARI, egitim_egrisi_goster
 
 SU_PARAMETRELERI = {
     'ph'             : {'min': 0.0,   'max': 14.0,    'default': 7.0,    'step': 0.1},
@@ -30,69 +22,6 @@ SU_PARAMETRELERI = {
     'Trihalomethanes': {'min': 0.7,   'max': 124.0,   'default': 66.4,   'step': 0.1},
     'Turbidity'      : {'min': 1.5,   'max': 6.7,     'default': 4.0,    'step': 0.1},
 }
-
-
-def egitim_egrisi_goster(gecmis):
-    train_loss = gecmis.get('train_loss', [])
-    val_loss   = gecmis.get('val_loss',   [])
-    train_acc  = gecmis.get('train_acc',  [])
-    val_acc    = gecmis.get('val_acc',    [])
-    en_iyi     = gecmis.get('en_iyi_epoch', None)
-    epoch_list = list(range(1, len(train_loss) + 1))
-
-    fig = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=('Loss Eğrisi', 'Accuracy Eğrisi'),
-        vertical_spacing=0.2
-    )
-    fig.add_trace(go.Scatter(
-        x=epoch_list, y=train_loss, mode='lines',
-        name='Train Loss', line=dict(color=RENKLER['birincil'], width=2)
-    ), row=1, col=1)
-    if val_loss:
-        fig.add_trace(go.Scatter(
-            x=epoch_list, y=val_loss, mode='lines',
-            name='Val Loss', line=dict(color=RENKLER['hata'], width=2, dash='dash')
-        ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=epoch_list, y=train_acc, mode='lines',
-        name='Train Acc', line=dict(color=RENKLER['ikincil'], width=2)
-    ), row=2, col=1)
-    if val_acc:
-        fig.add_trace(go.Scatter(
-            x=epoch_list, y=val_acc, mode='lines',
-            name='Val Acc', line=dict(color=RENKLER['uyari'], width=2, dash='dash')
-        ), row=2, col=1)
-    if en_iyi and en_iyi <= len(train_loss):
-        for row in [1, 2]:
-            fig.add_vline(
-                x=en_iyi, line_width=1.5, line_dash='dot',
-                line_color=RENKLER['mor'], row=row, col=1,
-                annotation_text=f'En iyi: {en_iyi}' if row == 1 else '',
-                annotation_position='top right'
-            )
-    fig.update_layout(
-        height=600,
-        showlegend=True,
-        plot_bgcolor='white', paper_bgcolor='white',
-        xaxis_title   = dict(text='Epoch', font=dict(size=14,color='black')),
-        xaxis2_title  = dict(text='Epoch', font=dict(size=14,color='black')),
-        yaxis_title   = dict(text='Loss',  font=dict(size=14,color='black')),
-        yaxis2_title  = dict(text='Accuracy', font=dict(size=14,color='black')),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02, xanchor='right',
-            x=1,
-            font = dict(size=14,color='black')
-        ),
-        font = dict(size=14,color='black'),
-    )
-    fig.update_xaxes(title_text='Epoch', gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(gridcolor='#A0A0A0',tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(title_text='Loss', row=1, col=1,tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(title_text='Accuracy', row=2, col=1,tickfont=dict(size=14,color='black'))
-    return fig
 
 
 def goster():
@@ -459,7 +388,7 @@ def goster():
 
                 if st.session_state.get('garaj_shap'):
                     shap_s = st.session_state['garaj_shap']
-                    from pages.shap_gorsellestirme import waterfall_plot
+                    from sekmeler.shap_gorsellestirme import waterfall_plot
                     fig_wf = waterfall_plot(
                         shap_s['waterfall'],
                         baslik=f'{shap_s["goruntu_adi"]} — SHAP Waterfall'
@@ -586,7 +515,6 @@ def _toplu_tahmin_sekmesi(tum_modeller):
     """
     Sekme 3: Toplu Tahmin — CSV yükleme ve toplu tahmin arayüzü.
     """
-    import io
     import pandas as pd
 
     st.subheader('📦 Toplu Tahmin')
@@ -594,12 +522,6 @@ def _toplu_tahmin_sekmesi(tum_modeller):
         'CSV dosyası yükleyin, tüm satırlar için otomatik '
         'tahmin yapılsın. Maksimum 1000 satır.'
     )
-
-    OZELLIK_KOLONLARI = [
-        'ph', 'Hardness', 'Solids', 'Chloramines',
-        'Sulfate', 'Conductivity', 'Organic_carbon',
-        'Trihalomethanes', 'Turbidity'
-    ]
 
     # ── Örnek CSV İndir ───────────────────────────────────────
     with st.expander('📥 Örnek CSV Formatı'):

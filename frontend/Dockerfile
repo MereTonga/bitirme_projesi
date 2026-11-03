@@ -2,7 +2,7 @@
 # Frontend (Streamlit UI)
 # Base: python:3.11-slim (kucuk image)
 # PyTorch / XGBoost / LightGBM / SHAP / Optuna burada YOK.
-# Frontend pages backend modullerini (preprocessor, balancer, data_loader)
+# Frontend sekmeleri backend modullerini (preprocessor, balancer, data_loader)
 # import ettigi icin sadece sklearn, imblearn, joblib gerekli.
 # =============================================
 FROM python:3.11-slim
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Frontend pages backend modullerini direkt import ediyor; ikisi de path'te olmali.
+# Frontend sekmeleri backend modullerini direkt import ediyor; ikisi de path'te olmali.
 ENV PYTHONPATH=/app/frontend:/app/backend
 
 # Once requirements'i yukle (Docker katman cache'i)

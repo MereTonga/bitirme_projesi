@@ -1,17 +1,7 @@
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from api_client import ann_egit, egitim_gecmisi, async_ann_egit, job_durum
-
-
-RENKLER = {
-    'birincil': '#3B82F6',
-    'ikincil' : '#10B981',
-    'uyari'   : '#F59E0B',
-    'hata'    : '#EF4444',
-    'mor'     : '#8B5CF6'
-}
+from ui_ortak import RENKLER, preprocessing_paneli, egitim_egrisi_goster
 
 
 # ─────────────────────────────────────────
@@ -105,93 +95,6 @@ def mimari_gorsellestir(gizli_katmanlar, dropout_orani, batch_norm):
 # EĞİTİM EĞRİSİ GRAFİĞİ
 # ─────────────────────────────────────────
 
-def egitim_egrisi_goster(gecmis):
-    """
-    Loss ve accuracy eğrilerini Plotly ile çizer.
-    """
-    train_loss = gecmis.get('train_loss', [])
-    val_loss   = gecmis.get('val_loss',   [])
-    train_acc  = gecmis.get('train_acc',  [])
-    val_acc    = gecmis.get('val_acc',    [])
-    en_iyi     = gecmis.get('en_iyi_epoch', None)
-    epoch_list = list(range(1, len(train_loss) + 1))
-
-    fig = make_subplots(
-        rows             = 2,
-        cols             = 1,
-        subplot_titles   = ('Loss Eğrisi', 'Accuracy Eğrisi'),
-        vertical_spacing = 0.2
-    )
-
-    # Loss
-    fig.add_trace(go.Scatter(
-        x=epoch_list, y=train_loss,
-        mode='lines', name='Train Loss',
-        line=dict(color=RENKLER['birincil'], width=2)
-    ), row=1, col=1)
-
-    if val_loss:
-        fig.add_trace(go.Scatter(
-            x=epoch_list, y=val_loss,
-            mode='lines', name='Val Loss',
-            line=dict(color=RENKLER['hata'], width=2, dash='dash')
-        ), row=1, col=1)
-
-    # Accuracy
-    fig.add_trace(go.Scatter(
-        x=epoch_list, y=train_acc,
-        mode='lines', name='Train Acc',
-        line=dict(color=RENKLER['ikincil'], width=2)
-    ), row=2, col=1)
-
-    if val_acc:
-        fig.add_trace(go.Scatter(
-            x=epoch_list, y=val_acc,
-            mode='lines', name='Val Acc',
-            line=dict(color=RENKLER['uyari'], width=2, dash='dash')
-        ), row=2, col=1)
-
-    # En iyi epoch çizgisi
-    if en_iyi and en_iyi <= len(train_loss):
-        for row in [1, 2]:
-            fig.add_vline(
-                x                   = en_iyi,
-                line_width          = 1.5,
-                line_dash           = 'dot',
-                line_color          = RENKLER['mor'],
-                row                 = row,
-                col                 = 1,
-                annotation_text     = f'En iyi: {en_iyi}' if row == 1 else '',
-                annotation_position = 'top right'
-            )
-
-    fig.update_layout(
-        height      = 600,
-        showlegend  = True,
-        xaxis_title   = dict(text='Epoch', font=dict(size=14,color='black')),
-        xaxis2_title  = dict(text='Epoch', font=dict(size=14,color='black')),
-        yaxis_title   = dict(text='Loss',  font=dict(size=14,color='black')),
-        yaxis2_title  = dict(text='Accuracy', font=dict(size=14,color='black')),
-        legend      = dict(
-            orientation = 'h',
-            yanchor     = 'bottom',
-            y           = 1.02,
-            xanchor     = 'right',
-            x           = 1,
-            font        = dict(size=14,color='black')
-        ),
-        plot_bgcolor  = 'white',
-        paper_bgcolor = 'white',
-        font = dict(size=14,color='black')
-    )
-    fig.update_xaxes(title_text='Epoch', gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(gridcolor="#A0A0A0",tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(title_text='Loss', row=1, col=1,tickfont=dict(size=14,color='black'))
-    fig.update_yaxes(title_text='Accuracy', row=2, col=1,tickfont=dict(size=14,color='black'))
-
-    return fig
-
-
 # ─────────────────────────────────────────
 # ANA FONKSİYON
 # ─────────────────────────────────────────
@@ -277,32 +180,7 @@ def goster():
     st.divider()
 
     # ── Preprocessing Ayarları ────────────────────────────────
-    with st.expander('⚙️ Preprocessing Ayarları', expanded=False):
-        dc1, dc2, dc3 = st.columns(3)
-        with dc1:
-            pre_imputer = st.selectbox(
-                'Imputer', ['median', 'knn'],
-                index = ['median', 'knn'].index(
-                    st.session_state.get('aktif_imputer', 'median')
-                ),
-                key = 'dl_imputer'
-            )
-        with dc2:
-            pre_scaler = st.selectbox(
-                'Scaler', ['robust', 'standard', 'minmax'],
-                index = ['robust', 'standard', 'minmax'].index(
-                    st.session_state.get('aktif_scaler', 'robust')
-                ),
-                key = 'dl_scaler'
-            )
-        with dc3:
-            pre_denge = st.selectbox(
-                'Dengesizlik', ['smote', 'class_weight', 'none'],
-                index = ['smote', 'class_weight', 'none'].index(
-                    st.session_state.get('aktif_dengesizlik', 'smote')
-                ),
-                key = 'dl_denge'
-            )
+    pre_ayar = preprocessing_paneli('dl')
 
     ozel_isim = st.text_input(
         'Model İsmi (opsiyonel):',
@@ -333,11 +211,7 @@ def goster():
             'batch_size'      : batch_size,
             'early_stopping'  : early_stopping,
             'patience'        : patience,
-            'preprocessing'   : {
-                'imputer_yontem': pre_imputer,
-                'scaler_yontem' : pre_scaler,
-                'dengesizlik'   : pre_denge
-            }
+            'preprocessing'   : pre_ayar
         }
         if ozel_isim:
             payload['ozel_isim'] = ozel_isim
@@ -376,7 +250,7 @@ def goster():
 
         if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
             st.markdown('**📊 Canlı İlerleme:**')
-            from pages.job_takip import job_progress_goster
+            from sekmeler.job_takip import job_progress_goster
             tamamlanan = job_progress_goster(job_id)
             if tamamlanan and tamamlanan.get('sonuc'):
                 st.session_state['son_dl_sonuc'] = tamamlanan['sonuc']

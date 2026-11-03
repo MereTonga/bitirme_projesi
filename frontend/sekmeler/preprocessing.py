@@ -1,28 +1,15 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+from ui_ortak import RENKLER, OZELLIK_KOLONLARI, EKSIK_KOLONLAR
 
 
 @st.cache_data
 def veri_yukle_cache():
     from data_loader import veri_yukle
     return veri_yukle()
-
-
-EKSIK_KOLONLAR    = ['ph', 'Sulfate', 'Trihalomethanes']
-OZELLIK_KOLONLARI = [
-    'ph', 'Hardness', 'Solids', 'Chloramines',
-    'Sulfate', 'Conductivity', 'Organic_carbon',
-    'Trihalomethanes', 'Turbidity'
-]
-RENKLER = {
-    'birincil': '#3B82F6',
-    'ikincil' : '#10B981',
-    'uyari'   : '#F59E0B',
-    'hata'    : '#EF4444',
-}
 
 
 def goster():

@@ -2,3 +2,4 @@
 #   pip install -r requirements-dev.txt
 pytest==8.3.5
 httpx==0.28.1        # FastAPI TestClient için
+streamlit==1.44.1    # frontend duman testi (AppTest)

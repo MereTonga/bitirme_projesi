@@ -244,7 +244,7 @@ print(f'      OK — job_durum(): {mevcut["durum"]}')
 dosyalar = {
     'backend/job_store.py'             : 'Job store',
     'backend/routers/async_router.py'  : 'Async router',
-    'frontend/pages/job_takip.py'      : 'Progress bar modülü'
+    'frontend/sekmeler/job_takip.py'      : 'Progress bar modülü'
 }
 kok = '/home/mertunix/workspace/proje_bitirme'
 for dosya, aciklama in dosyalar.items():

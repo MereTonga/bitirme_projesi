@@ -1,5 +1,17 @@
-import streamlit as st
-from api_client import saglik_kontrol
+import os
+import sys
+
+# Sekmeler backend modüllerini (config, data_loader, preprocessor ...) import
+# eder. Docker'da PYTHONPATH zaten ayarlı; lokal `streamlit run frontend/app.py`
+# ve testler (streamlit AppTest) için frontend ve backend klasörlerini yola ekle.
+_FRONTEND = os.path.dirname(os.path.abspath(__file__))
+_BACKEND  = os.path.join(os.path.dirname(_FRONTEND), 'backend')
+for _yol in (_FRONTEND, _BACKEND):
+    if _yol not in sys.path:
+        sys.path.append(_yol)
+
+import streamlit as st  # noqa: E402
+from api_client import saglik_kontrol  # noqa: E402
 
 # ─────────────────────────────────────────
 # SAYFA AYARLARI
@@ -64,7 +76,7 @@ st.divider()
 
 # Aktif job'ları sidebar'da göster
 try:
-    from pages.job_takip import aktif_joblar_goster
+    from sekmeler.job_takip import aktif_joblar_goster
     aktif_joblar_goster()
 except Exception:
     pass
@@ -82,21 +94,21 @@ sekme1, sekme2, sekme3, sekme4, sekme5 = st.tabs([
 ])
 
 with sekme1:
-    from pages.eda import goster
+    from sekmeler.eda import goster
     goster()
 
 with sekme2:
-    from pages.preprocessing import goster
+    from sekmeler.preprocessing import goster
     goster()
 
 with sekme3:
-    from pages.ml_egitim import goster
+    from sekmeler.ml_egitim import goster
     goster()
 
 with sekme4:
-    from pages.dl_egitim import goster
+    from sekmeler.dl_egitim import goster
     goster()
 
 with sekme5:
-    from pages.garaj import goster
+    from sekmeler.garaj import goster
     goster()

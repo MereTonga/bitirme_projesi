@@ -1,10 +1,12 @@
 import plotly.graph_objects as go
 
+from ui_ortak import RENKLER as _ORTAK
+
 RENKLER = {
-    'artis'   : '#10B981',   # Yeşil  → içilebilir (1) yönüne itiyor (pozitif SHAP)
-    'azalis'  : '#EF4444',   # Kırmızı → içilemez (0) yönüne itiyor (negatif SHAP)
-    'toplam'  : '#3B82F6',
-    'notr'    : '#94A3B8',
+    'artis'   : _ORTAK['ikincil'],   # Yeşil  → içilebilir (1) yönüne itiyor (pozitif SHAP)
+    'azalis'  : _ORTAK['hata'],      # Kırmızı → içilemez (0) yönüne itiyor (negatif SHAP)
+    'toplam'  : _ORTAK['birincil'],
+    'notr'    : _ORTAK['notr'],
 }
 
 

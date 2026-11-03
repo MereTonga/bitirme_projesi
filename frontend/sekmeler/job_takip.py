@@ -2,14 +2,6 @@ import time
 import streamlit as st
 from api_client import job_durum
 
-RENKLER = {
-    'birincil': '#3B82F6',
-    'ikincil' : '#10B981',
-    'uyari'   : '#F59E0B',
-    'hata'    : '#EF4444',
-    'mor'     : '#8B5CF6'
-}
-
 DURUM_EMOJI = {
     'bekliyor'  : '⏳',
     'calisiyor' : '🔄',
