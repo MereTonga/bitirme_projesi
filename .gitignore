@@ -21,5 +21,13 @@ __pycache__/
 # Log dosyaları
 *.log
 
-# Veritabanı
+# Veritabanı (SQLite ana dosya + WAL/SHM yardımcı dosyaları)
 database/*.db
+database/*.db-wal
+database/*.db-shm
+database/*.db-journal
+
+# Test / araç cache'leri
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
