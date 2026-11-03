@@ -203,3 +203,15 @@ def test_shap_aciklama_adaboost(istemci):
     r = istemci.post('/explain', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
                                        'su_parametreleri': ORNEK_SU})
     assert r.status_code == 200, r.text
+
+
+def test_dengesizlik_uyarilari(istemci):
+    # KNN class_weight desteklemez → uyarı
+    gov = _egit(istemci, '/train/ml/knn', {'preprocessing': {'dengesizlik': 'class_weight'}})
+    assert any('desteklemiyor' in u for u in gov['uyarilar'])
+    # SMOTE + balanced → çifte dengeleme uyarısı
+    gov = _egit(istemci, '/train/ml/logistic_regression', {'class_weight': 'balanced'})
+    assert any('çifte' in u for u in gov['uyarilar'])
+    # class_weight + LR → ağırlıklar uygulanır, uyarı yok
+    gov = _egit(istemci, '/train/ml/logistic_regression', {'preprocessing': {'dengesizlik': 'class_weight'}})
+    assert gov['uyarilar'] == [] and isinstance(gov['hiperparametreler']['class_weight'], dict)

@@ -236,8 +236,8 @@ def _tam_pipeline(model_adi, params, preprocessing_ayar):
         params['class_weight'] = 'balanced'   # her fold kendi oranından hesaplar
 
     adimlar = [
-        ('imputer', imputer_sec(pre.get('imputer', 'median'), pre.get('knn_k', 5))),
         ('scaler',  scaler_sec(pre.get('scaler', 'robust'))),
+        ('imputer', imputer_sec(pre.get('imputer', 'median'), pre.get('knn_k', 5))),
     ]
     if denge == 'smote':
         adimlar.append(('smote', SMOTE(random_state=RANDOM_STATE)))

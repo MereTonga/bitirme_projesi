@@ -130,6 +130,9 @@ def hiper_panel(model_adi):
 # ─────────────────────────────────────────
 
 def metrik_kartlari(sonuc):
+    for uyari in sonuc.get('uyarilar', []):
+        st.warning(f'⚠️ {uyari}')
+
     def _m(anahtar):
         v = sonuc.get(anahtar)
         return f"{v:.4f}" if isinstance(v, (int, float)) else '-'

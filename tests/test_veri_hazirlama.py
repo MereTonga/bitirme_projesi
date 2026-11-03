@@ -35,8 +35,12 @@ def test_split_oranlari_ve_sizinti_yok(ham_veri, hazir_veri):
         ham_veri[OZELLIK_KOLONLARI], test_size=TEST_ORAN,
         random_state=RANDOM_STATE, stratify=ham_veri[HEDEF_KOLON]
     )
-    imputer = pipe.named_steps['imputer']
-    assert np.allclose(imputer.statistics_, X_raw_train.median().values)
+    # Sıra scaler → imputer: imputer istatistikleri, train'in ÖLÇEKLENMİŞ medyanları
+    scaler, imputer = pipe.named_steps['scaler'], pipe.named_steps['imputer']
+    assert np.allclose(imputer.statistics_,
+                       np.nanmedian(scaler.transform(X_raw_train), axis=0))
+    # ve scaler'ın merkezi de yalnızca train medyanı (RobustScaler.center_)
+    assert np.allclose(scaler.center_, X_raw_train.median().values)
 
     assert cw is None and pw is None  # smote modunda class weight üretilmez
 

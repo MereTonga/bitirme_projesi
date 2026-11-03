@@ -58,11 +58,14 @@ def preprocessing_pipeline_olustur(
     knn_k          = 5
 ):
     """
-    Imputer + Scaler adımlarını tek bir Pipeline
-    objesi olarak oluşturur ve döndürür.
+    Scaler + Imputer adımlarını tek bir Pipeline objesi olarak oluşturur.
+
+    Sıra scaler → imputer'dır: sklearn scaler'ları NaN'ı fit'te yok sayıp
+    transform'da korur; KNNImputer böylece ölçeklenmiş uzayda komşu arar
+    (aksi halde mesafeyi Solids kolonu domine eder). Median imputer için
+    sonuç eski sırayla birebir aynıdır (medyan, ölçeklemeyle yer değiştirir).
 
     Bu pipeline SADECE X (özellikler) üzerinde çalışır.
-    Potability kolonu buraya girmez.
 
     Parametreler:
         imputer_yontem : 'median' veya 'knn'
@@ -73,8 +76,8 @@ def preprocessing_pipeline_olustur(
         pipeline: sklearn Pipeline objesi
     """
     pipeline = Pipeline(steps=[
-        ('imputer', imputer_sec(imputer_yontem, knn_k)),
-        ('scaler',  scaler_sec(scaler_yontem))
+        ('scaler',  scaler_sec(scaler_yontem)),
+        ('imputer', imputer_sec(imputer_yontem, knn_k))
     ])
     return pipeline
 

@@ -128,6 +128,7 @@ class MLEgitimYaniti(BaseModel):
     egitim_suresi      : float
     conf_matrix        : List[List[int]]
     hiperparametreler  : Dict[str, Any]
+    uyarilar           : List[str] = []
 
 
 # ─────────────────────────────────────────

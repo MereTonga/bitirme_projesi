@@ -96,6 +96,47 @@ def veri_hazirla_istekten(pre: PreprocessingAyarlari):
     )
 
 
+def _dengesizlik_uygula(model_adi, hiper, dengesizlik, cw, pw):
+    """
+    Seçilen dengesizlik yöntemini modelin hiperparametrelerine yansıtır ve
+    anlamsız kombinasyonlar için kullanıcıya gösterilecek uyarılar üretir.
+
+    class_weight modu:
+        - class_weight parametresi olan modeller (LR, DT, RF, SVM): hesaplanan ağırlıklar
+        - xgboost: scale_pos_weight = neg/pos (kullanıcı değiştirmediyse)
+        - lightgbm: is_unbalance = True
+        - diğerleri (NB, KNN, GB, AdaBoost): destek yok → uyarı
+    smote modu + model içi dengeleme (balanced / is_unbalance / scale_pos_weight≠1):
+        çifte dengeleme uyarısı
+    """
+    uyarilar = []
+    if dengesizlik == 'class_weight':
+        if 'class_weight' in hiper and cw:
+            hiper['class_weight'] = cw
+        elif model_adi == 'xgboost' and pw:
+            if hiper.get('scale_pos_weight', 1.0) == 1.0:
+                hiper['scale_pos_weight'] = float(pw)
+        elif model_adi == 'lightgbm':
+            hiper['is_unbalance'] = True
+        else:
+            uyarilar.append(
+                f"'{model_adi}' sınıf ağırlığı desteklemiyor; 'class_weight' seçimi "
+                f"etkisiz kaldı, model dengelenmeden eğitildi. SMOTE kullanmayı düşünün."
+            )
+    elif dengesizlik == 'smote':
+        ic_denge = (
+            hiper.get('class_weight') == 'balanced'
+            or hiper.get('is_unbalance') is True
+            or (hiper.get('scale_pos_weight') not in (None, 1.0))
+        )
+        if ic_denge:
+            uyarilar.append(
+                "SMOTE ile dengelenmiş veri üzerinde ayrıca model içi sınıf ağırlığı "
+                "kullanıldı (çifte dengeleme); azınlık sınıf aşırı ağırlıklanabilir."
+            )
+    return uyarilar
+
+
 # ─────────────────────────────────────────
 # 1. ML EĞİTİMİ
 # ─────────────────────────────────────────
@@ -116,13 +157,10 @@ def ml_egit(model_adi: str, istek, durum_cb=None) -> dict:
     hiper = istek.model_dump(exclude={'preprocessing', 'ozel_isim'})
 
     _bildir(durum_cb, 5, 'Veri hazırlanıyor...')
-    X_train, X_test, y_train, y_test, pipe, cw, _ = veri_hazirla_istekten(
+    X_train, X_test, y_train, y_test, pipe, cw, pw = veri_hazirla_istekten(
         istek.preprocessing
     )
-    # class_weight seçildiyse ve model destekliyorsa hesaplanan ağırlıkları ver
-    if istek.preprocessing.dengesizlik == 'class_weight' and cw \
-            and 'class_weight' in hiper:
-        hiper['class_weight'] = cw
+    uyarilar = _dengesizlik_uygula(model_adi, hiper, istek.preprocessing.dengesizlik, cw, pw)
 
     _bildir(durum_cb, 30, f'{model_adi} eğitiliyor...')
     model = ModelSinifi()
@@ -152,6 +190,7 @@ def ml_egit(model_adi: str, istek, durum_cb=None) -> dict:
         'egitim_suresi'    : metrikler['egitim_suresi'],
         'conf_matrix'      : metrikler['conf_matrix'],
         'hiperparametreler': hiper,
+        'uyarilar'         : uyarilar,
     }
 
 
