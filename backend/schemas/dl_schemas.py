@@ -17,6 +17,8 @@ class ANNIstek(BaseModel):
     batch_size       : int   = Field(default=32,    ge=8,     le=256)
     early_stopping   : bool  = True
     patience         : int   = Field(default=10,    ge=3,     le=50)
+    val_oran         : float = Field(default=0.2,   ge=0.1,   le=0.4,
+                                     description='Train içinden ayrılan validation oranı (SMOTE öncesi, stratified)')
     ozel_isim        : Optional[str] = None
 
     @field_validator('gizli_katmanlar')

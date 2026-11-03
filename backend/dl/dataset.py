@@ -51,9 +51,18 @@ def dataloader_olustur(X, y, batch_size=32, karistir=True):
         DataLoader objesi
     """
     dataset = SuKalitesiDataset(X, y)
+    # BatchNorm1d tek örnekli batch'te hata verir; son batch 1 örnek kalacaksa düşür
+    son_batch_tek = karistir and len(dataset) % batch_size == 1
     return DataLoader(
         dataset,
         batch_size = batch_size,
         shuffle    = karistir,
-        drop_last  = False
+        drop_last  = son_batch_tek,
+        generator  = _uretec() if karistir else None
     )
+
+
+def _uretec():
+    """Shuffle için sabit seed'li üreteç — tekrar üretilebilir batch sırası."""
+    from config import RANDOM_STATE
+    return torch.Generator().manual_seed(RANDOM_STATE)

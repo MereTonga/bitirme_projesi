@@ -169,3 +169,49 @@ def veri_hazirla(
         pipeline,
         class_weights, pos_weight
     )
+
+
+# ─────────────────────────────────────────
+# 6. ANN İÇİN TRAIN / VAL / TEST AYRIMI
+# ─────────────────────────────────────────
+
+def veri_hazirla_val(
+    df,
+    imputer_yontem = 'median',
+    scaler_yontem  = 'robust',
+    dengesizlik    = 'smote',
+    knn_k          = 5,
+    test_oran      = TEST_ORAN,
+    val_oran       = 0.2,
+    random_state   = RANDOM_STATE
+):
+    """
+    Early stopping için validation seti olan akış (ANN):
+
+        1. Stratified train/test split
+        2. Train'den stratified validation ayır (SMOTE'tan ÖNCE → val'de
+           sentetik örnek yok, sınıf oranı gerçek dağılımla aynı)
+        3. Pipeline sadece train'e fit; val ve test'e transform
+        4. Dengesizlik (SMOTE / class_weight) sadece train'e
+
+    Döndürür:
+        X_tr, X_val, X_test, y_tr, y_val, y_test, pipeline, class_weights, pos_weight
+    """
+    X_train, X_test, y_train, y_test = ham_split(df, test_oran, random_state)
+    X_tr, X_val, y_tr, y_val = train_test_split(
+        X_train, y_train, test_size=val_oran,
+        random_state=random_state, stratify=y_train
+    )
+
+    pipeline = preprocessing_pipeline_olustur(imputer_yontem, scaler_yontem, knn_k)
+    X_tr_s   = pipeline.fit_transform(X_tr)
+    X_val_s  = pipeline.transform(X_val)
+    X_test_s = pipeline.transform(X_test)
+
+    class_weights, pos_weight = None, None
+    if dengesizlik == 'smote':
+        X_tr_s, y_tr = smote_uygula(X_tr_s, y_tr, random_state)
+    elif dengesizlik == 'class_weight':
+        class_weights, pos_weight = class_weight_hesapla(y_tr)
+
+    return X_tr_s, X_val_s, X_test_s, y_tr, y_val, y_test, pipeline, class_weights, pos_weight

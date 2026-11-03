@@ -15,7 +15,7 @@ import time
 import numpy as np
 
 from data_loader        import veri_yukle
-from pipeline_builder   import veri_hazirla, ham_split
+from pipeline_builder   import veri_hazirla, veri_hazirla_val, ham_split
 from ml.evaluator       import model_degerlendir, metrikleri_hesapla, METRIK_ANAHTARLARI
 from garage_manager     import model_kaydet
 from schemas.ml_schemas import (
@@ -174,14 +174,16 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
     hiper = istek.model_dump(exclude={'preprocessing', 'ozel_isim'})
 
     _bildir(durum_cb, 5, 'Veri hazırlanıyor...')
-    X_train, X_test, y_train, y_test, pipe, _, pw = veri_hazirla_istekten(
-        istek.preprocessing
+    pre = istek.preprocessing
+    X_tr, X_val, X_test, y_tr, y_val, y_test, pipe, _, pw = veri_hazirla_val(
+        veri_yukle(),
+        imputer_yontem = pre.imputer_yontem,
+        scaler_yontem  = pre.scaler_yontem,
+        dengesizlik    = pre.dengesizlik,
+        knn_k          = pre.knn_k,
+        test_oran      = pre.test_oran,
+        val_oran       = istek.val_oran,
     )
-
-    # Train / validation ayrımı (Faz 2.3'te stratified ve SMOTE öncesine alınacak)
-    val_boyut = int(len(X_train) * 0.2)
-    X_val, y_val = X_train[:val_boyut], y_train[:val_boyut]
-    X_tr,  y_tr  = X_train[val_boyut:], y_train[val_boyut:]
 
     _bildir(durum_cb, 15, 'ANN eğitimi başlıyor...')
     baslangic = time.perf_counter()

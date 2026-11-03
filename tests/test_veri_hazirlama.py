@@ -50,3 +50,29 @@ def test_class_weight_modu(ham_veri):
     assert cw[1] > cw[0]          # azınlık sınıfa daha yüksek ağırlık
     assert pw > 1.0
     assert (y_train == 1).sum() < (y_train == 0).sum()   # SMOTE uygulanmadı
+
+
+def test_ann_val_ayrimi_smote_oncesi_ve_stratified(ham_veri):
+    from pipeline_builder import veri_hazirla_val
+    X_tr, X_val, X_test, y_tr, y_val, y_test, pipe, cw, pw = veri_hazirla_val(
+        ham_veri, dengesizlik='smote', val_oran=0.2
+    )
+    ham_oran = ham_veri[HEDEF_KOLON].mean()
+    assert abs(y_val.mean() - ham_oran) < 0.02            # val stratified, sentetik yok
+    assert abs(y_test.mean() - ham_oran) < 0.02
+    assert (y_tr == 0).sum() == (y_tr == 1).sum()          # SMOTE sadece train'e
+    assert len(X_val) == 524 and len(X_test) == 656        # 0.2 * 2620, 0.2 * 3276
+    assert not np.isnan(X_val).any()
+
+
+def test_ann_egitimi_tekrar_uretilebilir(ham_veri):
+    from pipeline_builder import veri_hazirla_val
+    from dl.trainer import model_egit
+    X_tr, X_val, _, y_tr, y_val, _, _, _, pw = veri_hazirla_val(ham_veri, dengesizlik='class_weight')
+    sonuclar = []
+    for _ in range(2):
+        _, gecmis, _ = model_egit(X_tr, y_tr, X_val=X_val, y_val=y_val, gizli_katmanlar=[8],
+                                  epochs=3, batch_size=256, pos_weight=pw, early_stopping=False)
+        sonuclar.append(gecmis['train_loss'])
+    assert sonuclar[0] == sonuclar[1]                       # sabit seed → aynı loss eğrisi
+    assert gecmis['en_iyi_epoch'] >= 1                      # early stopping kapalıyken de dolu

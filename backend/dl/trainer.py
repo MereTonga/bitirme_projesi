@@ -1,6 +1,7 @@
 import copy
 import torch
 import torch.nn as nn
+from config import RANDOM_STATE
 from dl.ann_model import DinamikANN
 from dl.dataset   import dataloader_olustur
 
@@ -219,6 +220,11 @@ def model_egit(
     """
     device = cihaz_sec()
 
+    # Tekrar üretilebilirlik: ağırlık başlatma ve dropout maskeleri
+    torch.manual_seed(RANDOM_STATE)
+    if device.type == 'cuda':
+        torch.cuda.manual_seed_all(RANDOM_STATE)
+
     # ── Model ──────────────────────────────────────
     model = DinamikANN(
         giris_boyutu    = X_train.shape[1],
@@ -321,10 +327,16 @@ def model_egit(
                 gecmis['en_iyi_epoch'] = es.en_iyi_epoch
                 break
 
-    # En iyi ağırlıkları geri yükle
+    # En iyi ağırlıkları geri yükle / en iyi epoch'u belirle
     if es is not None:
         es.en_iyi_agirliklari_yukle(model)
         if not gecmis['durduruldu']:
             gecmis['en_iyi_epoch'] = es.en_iyi_epoch
+    elif gecmis['val_loss']:
+        # Early stopping kapalı: en düşük val loss'un epoch'u (bilgi amaçlı)
+        gecmis['en_iyi_epoch'] = int(min(range(len(gecmis['val_loss'])),
+                                         key=gecmis['val_loss'].__getitem__)) + 1
+    else:
+        gecmis['en_iyi_epoch'] = len(gecmis['train_loss'])
 
     return model, gecmis, device
