@@ -108,7 +108,7 @@ def goster():
             showlegend  = False,
             margin      = dict(t=20, b=20, l=20, r=20)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key='eda_grafik_1')
 
     st.divider()
 
@@ -178,7 +178,7 @@ def goster():
             title   = f'{secili_ozellik} — Genel Dağılım'
         )
         fig1.update_layout(height=650, showlegend=False)
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, key='eda_grafik_2')
 
     with col2:
         # Potability'e göre ayrıştırılmış
@@ -196,7 +196,7 @@ def goster():
         )
         fig2.update_traces(opacity=0.7)
         fig2.update_layout(height=650)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key='eda_grafik_3')
 
     st.divider()
 
@@ -229,7 +229,7 @@ def goster():
         title   = f'{secili_box_ozellik} Box Plot (Kırmızı=İçilemez, Yeşil=İçilebilir)',
         xaxis_tickangle = 0,
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True, key='eda_grafik_4')
 
     with st.expander('📋 Outlier Özet Tablosu'):
         st.dataframe(
@@ -263,7 +263,7 @@ def goster():
         margin=dict(t=60, b=30, l=30, r=30),
         font=dict(size=18,color='black')
     )
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True, key='eda_grafik_5')
 
     st.info(
         '**Gözlem:** Hiçbir özellik Potability ile güçlü '

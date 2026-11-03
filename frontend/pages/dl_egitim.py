@@ -240,7 +240,7 @@ def goster():
     fig_mimari = mimari_gorsellestir(
         gizli_katmanlar, dropout_orani, batch_norm
     )
-    st.plotly_chart(fig_mimari, use_container_width=True)
+    st.plotly_chart(fig_mimari, use_container_width=True, key='dl_egitim_grafik_1')
 
     st.divider()
 
@@ -449,7 +449,7 @@ def goster():
             )
         else:
             fig_egri = egitim_egrisi_goster(gecmis_veri)
-            st.plotly_chart(fig_egri, use_container_width=True)
+            st.plotly_chart(fig_egri, use_container_width=True, key='dl_egitim_grafik_2')
 
             # Toplam epoch bilgisi
             toplam = len(gecmis_veri.get('train_loss', []))

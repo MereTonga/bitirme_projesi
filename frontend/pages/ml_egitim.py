@@ -155,7 +155,7 @@ def confusion_matrix_goster(conf_matrix):
         annotation_text=[[str(z[i][j]) for j in range(2)] for i in range(2)]
     )
     fig.update_layout(title='Confusion Matrix', height=550, font=dict(size=16))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key='ml_egitim_grafik_1')
 
 
 # ─────────────────────────────────────────
@@ -423,7 +423,7 @@ def goster():
                 fig_trial = trial_grafigi(
                     opt['trial_gecmisi'], model_adi
                 )
-                st.plotly_chart(fig_trial, use_container_width=True)
+                st.plotly_chart(fig_trial, use_container_width=True, key='ml_egitim_grafik_2')
 
             # En iyi parametreler tablosu
             st.subheader('🏆 En İyi Parametreler')
@@ -628,7 +628,7 @@ def goster():
                     ozet,
                     baslik=f'{sonuc["model_adi"]} — SHAP Özellik Önemi'
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key='ml_egitim_grafik_3')
                 st.caption(
                     f'En önemli 3 özellik: '
                     + ', '.join(ozet['onem_sirasi'][:3])

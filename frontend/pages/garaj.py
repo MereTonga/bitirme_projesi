@@ -109,7 +109,8 @@ def goster():
     # ══════════════════════════════════════════════════════════
     # SEKME 1: MODELLER
     # ══════════════════════════════════════════════════════════
-    with ana1:
+    def _modeller_sekmesi():
+        """Sekme 1 gövdesi. Model yokken erken return sadece bu sekmeyi bitirir."""
 
         # ── DB İstatistik Kartları ────────────────────────────
         istat = db_model_istatistik()
@@ -238,7 +239,7 @@ def goster():
                 plot_bgcolor= 'white',
                 margin      = dict(l=20, r=80)
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, use_container_width=True, key='garaj_grafik_1')
             st.caption('🔵 ML modelleri   🟣 DL modelleri')
 
         # ── Model Notu ────────────────────────────────────────
@@ -290,7 +291,7 @@ def goster():
                 gecmis_veri = egitim_gecmisi(secili_dl['dosya_adi'])
                 if 'hata' not in gecmis_veri:
                     fig_egri = egitim_egrisi_goster(gecmis_veri)
-                    st.plotly_chart(fig_egri, use_container_width=True)
+                    st.plotly_chart(fig_egri, use_container_width=True, key='garaj_grafik_2')
                 else:
                     st.warning('Eğitim geçmişi bulunamadı.')
 
@@ -311,6 +312,10 @@ def goster():
                     else:
                         st.success(f'✅ {isim_listesi[sil_idx]} silindi.')
                         st.rerun()
+
+
+    with ana1:
+        _modeller_sekmesi()
 
     # ══════════════════════════════════════════════════════════
     # SEKME 2: TAHMİN
@@ -457,7 +462,7 @@ def goster():
                         shap_s['waterfall'],
                         baslik=f'{shap_s["goruntu_adi"]} — SHAP Waterfall'
                     )
-                    st.plotly_chart(fig_wf, use_container_width=True)
+                    st.plotly_chart(fig_wf, use_container_width=True, key='garaj_grafik_3')
                     st.caption(
                         'Her çubuğun yüksekliği o özelliğin '
                         'tahmini ne kadar etkilediğini gösterir.'
@@ -529,7 +534,7 @@ def goster():
                 plot_bgcolor= 'white',
                 legend      = dict(orientation='h')
             )
-            st.plotly_chart(fig_trend, use_container_width=True)
+            st.plotly_chart(fig_trend, use_container_width=True, key='garaj_grafik_4')
         else:
             st.info('Henüz tahmin geçmişi yok.')
 
@@ -792,7 +797,7 @@ def _toplu_tahmin_sekmesi(tum_modeller):
             showlegend = False,
             margin     = dict(t=20, b=20, l=10, r=10)
         )
-        st.plotly_chart(fig_pasta, use_container_width=True)
+        st.plotly_chart(fig_pasta, use_container_width=True, key='garaj_grafik_5')
 
     with gc2:
         st.markdown(f'''

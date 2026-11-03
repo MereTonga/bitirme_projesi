@@ -196,7 +196,7 @@ def goster():
                 height      = 650,
                 yaxis_title = 'Eksik Sayısı'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key='preprocessing_grafik_1')
 
         # ── Tab 2: Scaling ─────────────────────────────────────
         with on2:
@@ -231,7 +231,7 @@ def goster():
                 ), row=1, col=2
             )
             fig2.update_layout(height=560, showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, use_container_width=True, key='preprocessing_grafik_2')
 
         # ── Tab 3: Dengesizlik ─────────────────────────────────
         with on3:
@@ -278,7 +278,7 @@ def goster():
                 ), row=1, col=col_idx)
 
             fig3.update_layout(height=600)
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, use_container_width=True, key='preprocessing_grafik_3')
 
             tablo_df = pd.DataFrame([
                 {
