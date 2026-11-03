@@ -12,6 +12,54 @@ def veri_yukle_cache():
     return veri_yukle()
 
 
+@st.cache_data(show_spinner=False)
+def onizleme_hesapla(imputer_yontem, knn_k, scaler_yontem, dengesizlik):
+    """
+    Önizleme için imputation → scaling → (train split üzerinde) dengesizlik.
+    Ayar kombinasyonu başına bir kez hesaplanır; diğer sekmelerdeki
+    etkileşimler (her biri tüm uygulamayı yeniden çalıştırır) bunu tekrarlamaz.
+    """
+    from preprocessor import eksik_veri_doldur, veri_olceklendir
+    from balancer import smote_uygula, class_weight_hesapla
+    from sklearn.model_selection import train_test_split
+    from config import RANDOM_STATE, TEST_ORAN
+
+    df = veri_yukle_cache()
+    df_dolu, _   = eksik_veri_doldur(df, yontem=imputer_yontem, knn_k=knn_k)
+    df_scaled, _ = veri_olceklendir(df_dolu, yontem=scaler_yontem)
+
+    X = df_scaled[OZELLIK_KOLONLARI].values
+    y = df_scaled['Potability'].values
+    X_train, _, y_train, _ = train_test_split(
+        X, y, test_size=TEST_ORAN, random_state=RANDOM_STATE, stratify=y
+    )
+    once = (int((y_train == 0).sum()), int((y_train == 1).sum()))
+    cw_bilgi = None
+
+    if dengesizlik == 'smote':
+        _, y_res = smote_uygula(X_train, y_train)
+        sonra = (int((y_res == 0).sum()), int((y_res == 1).sum()))
+        yontem_adi = 'SMOTE'
+    elif dengesizlik == 'class_weight':
+        cw, pw = class_weight_hesapla(y_train)
+        sonra = once
+        yontem_adi = 'Class Weight'
+        cw_metin = ', '.join(f'{k}: {float(v):.4f}' for k, v in cw.items())
+        cw_bilgi = f'sklearn class_weight: {{{cw_metin}}} | PyTorch pos_weight: {float(pw):.4f}'
+    else:
+        sonra = once
+        yontem_adi = 'Yok'
+
+    return {
+        'df_dolu'   : df_dolu,
+        'df_scaled' : df_scaled,
+        'once'      : once,
+        'sonra'     : sonra,
+        'yontem_adi': yontem_adi,
+        'cw_bilgi'  : cw_bilgi,
+    }
+
+
 def goster():
     st.header('⚙️ Preprocessing & Veri Hazırlığı')
     st.caption(
@@ -114,34 +162,28 @@ def goster():
 
     uygula = st.button('▶️ Preprocessing Uygula ve Önizle', type='primary')
 
-    if uygula or st.session_state.get('pre_sonuc'):
+    if uygula:
+        st.session_state['pre_sonuc'] = True
+
+    if st.session_state.get('pre_sonuc'):
         with st.spinner('Preprocessing uygulanıyor...'):
             try:
-                from preprocessor import (
-                    eksik_veri_doldur, veri_olceklendir, scaling_raporu
+                onizleme = onizleme_hesapla(
+                    imputer_yontem, knn_k, scaler_yontem, dengesizlik
                 )
-                from balancer import smote_uygula, class_weight_hesapla
-                from sklearn.model_selection import train_test_split
-
-                df_dolu, _  = eksik_veri_doldur(df, yontem=imputer_yontem, knn_k=knn_k)
-                df_scaled, _ = veri_olceklendir(df_dolu, yontem=scaler_yontem)
-
-                # Session state'e kaydet
-                st.session_state['pre_sonuc']         = True
-                st.session_state['pre_df_dolu']       = df_dolu
-                st.session_state['pre_df_scaled']     = df_scaled
-                st.session_state['pre_imputer_sec']   = imputer_yontem
-                st.session_state['pre_scaler_sec']    = scaler_yontem
-                st.session_state['pre_dengesizlik_sec'] = dengesizlik
-
             except Exception as e:
                 st.error(f'Hata: {str(e)}')
                 return
 
         st.success('✅ Preprocessing başarıyla uygulandı!')
+        st.caption(
+            'ℹ️ Önizleme tüm veri üzerinde gösterilir. Model eğitiminde imputer ve '
+            'scaler yalnızca eğitim setine fit edilir, SMOTE yalnızca eğitim setine '
+            'uygulanır (test setine sızıntı olmaz).'
+        )
 
-        df_dolu   = st.session_state['pre_df_dolu']
-        df_scaled = st.session_state['pre_df_scaled']
+        df_dolu   = onizleme['df_dolu']
+        df_scaled = onizleme['df_scaled']
 
         on1, on2, on3 = st.tabs([
             '1️⃣ Eksik Veri',
@@ -188,6 +230,7 @@ def goster():
         # ── Tab 2: Scaling ─────────────────────────────────────
         with on2:
             st.markdown('**Ölçeklendirme — Önce / Sonra**')
+            from preprocessor import scaling_raporu
             rapor = scaling_raporu(df_dolu, df_scaled)
             st.dataframe(
                 rapor,
@@ -224,28 +267,11 @@ def goster():
         with on3:
             st.markdown('**Sınıf Dengesizliği Yönetimi**')
 
-            X = df_scaled[OZELLIK_KOLONLARI].values
-            y = df_scaled['Potability'].values
-            X_train, _, y_train, _ = train_test_split(
-                X, y, test_size=0.2, random_state=42, stratify=y
-            )
-
-            once_0 = int((y_train == 0).sum())
-            once_1 = int((y_train == 1).sum())
-
-            if dengesizlik == 'smote':
-                X_res, y_res = smote_uygula(X_train, y_train)
-                sonra_0 = int((y_res == 0).sum())
-                sonra_1 = int((y_res == 1).sum())
-                yontem_adi = 'SMOTE'
-            elif dengesizlik == 'class_weight':
-                cw, pw = class_weight_hesapla(y_train)
-                sonra_0, sonra_1 = once_0, once_1
-                yontem_adi = 'Class Weight'
-                st.info(f'sklearn class_weight: {cw} | PyTorch pos_weight: {pw}')
-            else:
-                sonra_0, sonra_1 = once_0, once_1
-                yontem_adi = 'Yok'
+            once_0, once_1   = onizleme['once']
+            sonra_0, sonra_1 = onizleme['sonra']
+            yontem_adi       = onizleme['yontem_adi']
+            if onizleme['cw_bilgi']:
+                st.info(onizleme['cw_bilgi'])
 
             fig3 = make_subplots(
                 rows = 1, cols = 2,
