@@ -124,7 +124,6 @@ class MLEgitimYaniti(BaseModel):
     egitim_suresi      : float
     conf_matrix        : List[List[int]]
     hiperparametreler  : Dict[str, Any]
-    cache_hit          : bool = False
 
 
 # ─────────────────────────────────────────

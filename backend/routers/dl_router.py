@@ -8,7 +8,6 @@ from pipeline_builder        import veri_hazirla
 from dl.trainer              import model_egit
 from dl.dl_garage            import ann_kaydet, ann_tahmin
 from dl.egitim_grafigi       import egitim_ozeti
-from cache                   import hiper_hash, cache_kontrol, cache_kaydet
 
 from sklearn.metrics import (
     accuracy_score, f1_score, roc_auc_score
@@ -43,13 +42,7 @@ def ann_egit(istek: ANNIstek):
         'patience'       : istek.patience
     }
 
-    # ── 1. Cache Kontrolü ─────────────────────────────────────
-    hash_key = hiper_hash('ann', hiperparametreler)
-    cached   = cache_kontrol(hash_key)
-    if cached:
-        return ANNEgitimYaniti(**cached)
-
-    # ── 2. Veri Hazırlama ─────────────────────────────────────
+    # ── 1. Veri Hazırlama ─────────────────────────────────────
     try:
         df = veri_yukle()
         X_train, X_test, y_train, y_test, pipe, cw, pw = veri_hazirla(
@@ -175,8 +168,5 @@ def ann_egit(istek: ANNIstek):
         'hiperparametreler': hiperparametreler,
         'gecmis_dosyasi'   : kayit['gecmis_yol']
     }
-
-    # ── 9. Cache'e Kaydet ─────────────────────────────────────
-    cache_kaydet(hash_key, sonuc)
 
     return ANNEgitimYaniti(**sonuc)

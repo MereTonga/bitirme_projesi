@@ -167,8 +167,7 @@ def _ml_egit_arkaplanda(
             'roc_auc'          : metrikler['roc_auc'],
             'egitim_suresi'    : metrikler['egitim_suresi'],
             'conf_matrix'      : metrikler['conf_matrix'],
-            'hiperparametreler': hiperparametreler,
-            'cache_hit'        : False
+            'hiperparametreler': hiperparametreler
         }
 
         store.job_guncelle(

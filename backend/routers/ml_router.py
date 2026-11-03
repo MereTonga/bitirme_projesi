@@ -11,7 +11,6 @@ from data_loader      import veri_yukle
 from pipeline_builder import veri_hazirla
 from ml.evaluator     import model_degerlendir
 from garage_manager   import model_kaydet
-from cache            import hiper_hash, cache_kontrol, cache_kaydet
 
 # Pipeline'ı otomatik kaydet — /predict için gerekli
 from pipeline_builder import pipeline_kaydet as _pipeline_kaydet
@@ -36,14 +35,7 @@ def ml_egit_ve_degerlendir(model_obj, istek, hiperparametreler):
     Döndürür:
         MLEgitimYaniti
     """
-    # 1. Cache kontrolü
-    hash_key = hiper_hash(model_obj.model_adi, hiperparametreler)
-    cached   = cache_kontrol(hash_key)
-    if cached:
-        cached['cache_hit'] = True
-        return MLEgitimYaniti(**cached)
-
-    # 2. Veri hazırlama
+    # 1. Veri hazırlama
     try:
         df = veri_yukle()
         X_train, X_test, y_train, y_test, pipe, cw, pw = veri_hazirla(
@@ -106,12 +98,8 @@ def ml_egit_ve_degerlendir(model_obj, istek, hiperparametreler):
         'roc_auc'          : metrikler['roc_auc'],
         'egitim_suresi'    : metrikler['egitim_suresi'],
         'conf_matrix'      : metrikler['conf_matrix'],
-        'hiperparametreler': hiperparametreler,
-        'cache_hit'        : False
+        'hiperparametreler': hiperparametreler
     }
-
-    # 7. Cache'e kaydet
-    cache_kaydet(hash_key, sonuc)
 
     return MLEgitimYaniti(**sonuc)
 

@@ -333,10 +333,7 @@ def goster():
             if 'hata' in sonuc:
                 st.error(f'❌ Hata: {sonuc["hata"]}')
             else:
-                if sonuc.get('cache_hit'):
-                    st.info('⚡ Cache\'den yüklendi.')
-                else:
-                    st.success('✅ Eğitim tamamlandı!')
+                st.success('✅ Eğitim tamamlandı!')
                 st.session_state['son_ml_sonuc']  = sonuc
                 st.session_state['son_ml_shap_ozet'] = None
 
