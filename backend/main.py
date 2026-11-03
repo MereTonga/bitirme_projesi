@@ -10,11 +10,14 @@ app = FastAPI(
     modelleri eğiten ve tahmin yapan REST API.
 
     ## Endpoint Grupları
-    - **/train/ml** → ML modeli eğitimi
-    - **/train/dl** → ANN modeli eğitimi
-    - **/models**   → Model garajı yönetimi
-    - **/predict**  → Tahmin
-    - **/db**       → Veritabanı sorguları
+    - **/train/ml/{model}**        → ML modeli eğitimi (senkron)
+    - **/train/dl/ann**            → ANN modeli eğitimi (senkron)
+    - **/train/ml/async/{model}**, **/train/dl/async** → arka planda eğitim, /jobs ile takip
+    - **/optimize**, **/optimize/async** → Optuna hiperparametre optimizasyonu
+    - **/explain**, **/explain/summary** → SHAP açıklamaları
+    - **/models**                  → Model garajı (liste, detay, geçmiş, silme)
+    - **/predict**, **/predict/batch** → Tahmin
+    - **/db/**                     → Veritabanı sorguları
     ''',
     version     = '1.0.0'
 )

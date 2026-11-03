@@ -134,7 +134,11 @@ class OptimizasyonIstek(BaseModel):
     """
     Hiperparametre optimizasyonu isteği.
     """
-    model_adi       : str
+    model_adi       : Literal[
+        'logistic_regression', 'naive_bayes', 'knn', 'decision_tree',
+        'random_forest', 'gradient_boosting', 'xgboost', 'lightgbm',
+        'adaboost', 'svm'
+    ]
     n_trials        : int   = Field(default=20, ge=5,  le=100)
     timeout         : Optional[int] = Field(
         default=None, ge=10, le=600,

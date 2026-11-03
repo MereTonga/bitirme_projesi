@@ -181,7 +181,8 @@ def model_egit(
     pos_weight      = None,
     early_stopping  = True,
     patience        = 10,
-    min_delta       = 0.001
+    min_delta       = 0.001,
+    epoch_callback  = None
 ):
     """
     ANN modelini eğitir. Early stopping destekli.
@@ -201,6 +202,8 @@ def model_egit(
         early_stopping  : True/False
         patience        : Early stopping sabır değeri
         min_delta       : Minimum iyileşme eşiği
+        epoch_callback  : Her epoch sonunda çağrılır:
+                          epoch_callback(epoch, train_loss, val_loss|None)
 
     Döndürür:
         model    : Eğitilmiş DinamikANN (en iyi ağırlıklarla)
@@ -296,6 +299,16 @@ def model_egit(
                 f"Train Acc: {train_acc:.4f}"
                 + val_bilgi
             )
+
+        # İlerleme callback'i (asenkron job takibi) — hata eğitimi durdurmaz
+        if epoch_callback is not None:
+            try:
+                epoch_callback(
+                    epoch, train_loss,
+                    gecmis['val_loss'][-1] if val_loader else None
+                )
+            except Exception:
+                pass
 
         # Early Stopping kontrolü
         if es is not None:

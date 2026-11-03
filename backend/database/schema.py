@@ -77,6 +77,18 @@ CREATE TABLE IF NOT EXISTS tahminler (
 )
 '''
 
+OPTIMIZASYON_TABLOSU = '''
+CREATE TABLE IF NOT EXISTS optimizasyon_sonuclari (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_adi           TEXT NOT NULL,
+    en_iyi_auc          REAL,
+    en_iyi_params       TEXT,
+    toplam_trial        INTEGER,
+    optimizasyon_suresi REAL,
+    kayit_zamani        TEXT
+)
+'''
+
 # İndeksler — sık sorgulanan kolonlar
 INDEKSLER = [
     'CREATE INDEX IF NOT EXISTS idx_modeller_turu ON modeller(model_turu)',
@@ -104,6 +116,7 @@ def veritabani_olustur():
         cursor.execute(MODELLER_TABLOSU)
         cursor.execute(EGITIM_GECMISI_TABLOSU)
         cursor.execute(TAHMINLER_TABLOSU)
+        cursor.execute(OPTIMIZASYON_TABLOSU)
 
         # İndeksleri oluştur
         for indeks in INDEKSLER:

@@ -119,7 +119,7 @@ class JobStore:
         Başlangıç zamanına göre azalan sıralı.
         """
         with self._lock:
-            tum = list(self._store.values())
+            tum = [dict(job) for job in self._store.values()]
 
         return sorted(
             tum,
