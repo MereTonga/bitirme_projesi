@@ -3,13 +3,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ui_ortak import RENKLER, OZELLIK_KOLONLARI, EKSIK_KOLONLAR
-
-
-@st.cache_data
-def veri_yukle_cache():
-    from data_loader import veri_yukle
-    return veri_yukle()
+from ui_ortak import (
+    RENKLER, OZELLIK_KOLONLARI, EKSIK_KOLONLAR,
+    veri_yukle_cache, eksiklik_ozeti_goster,
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -69,23 +66,9 @@ def goster():
 
     df = veri_yukle_cache()
 
-    # ── MCAR Bilgi Kutusu ─────────────────────────────────────
+    # ── Eksik Veri Mekanizması ──────────────────────────────────
     with st.expander('ℹ️ Eksik Veri Türü Analizi Sonuçları', expanded=True):
-        st.markdown("""
-        Eksik veri analizi sonucunda **3 kolonun da MCAR**
-        (Missing Completely At Random — Tamamen Rastlantısal)
-        olduğu tespit edildi.
-
-        | Kolon | Eksik Sayı | Oran | Sinyal |
-        |-------|-----------|------|--------|
-        | ph | 491 | %15.0 | 🟢 MCAR |
-        | Sulfate | 781 | %23.8 | 🟢 MCAR |
-        | Trihalomethanes | 162 | %4.9 | 🟢 MCAR |
-
-        MCAR durumunda herhangi bir imputation yöntemi
-        güvenle kullanılabilir. Tek global yöntem tüm
-        kolonlara uygulanmaktadır.
-        """)
+        eksiklik_ozeti_goster()
 
     st.divider()
 

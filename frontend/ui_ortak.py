@@ -14,6 +14,8 @@ from config import OZELLIK_KOLONLARI, EKSIK_KOLONLAR, TEST_ORAN
 __all__ = [
     'OZELLIK_KOLONLARI', 'EKSIK_KOLONLAR', 'RENKLER',
     'preprocessing_paneli', 'egitim_egrisi_goster',
+    'veri_yukle_cache', 'eksik_analiz_cache', 'little_cache',
+    'SINYAL_ETIKETI', 'eksiklik_ozeti_goster',
 ]
 
 
@@ -29,6 +31,90 @@ RENKLER = {
     'mor'     : '#8B5CF6',
     'notr'    : '#94A3B8',
 }
+
+
+# ─────────────────────────────────────────
+# VERİ VE EKSİKLİK ANALİZİ (önbellekli)
+# ─────────────────────────────────────────
+
+@st.cache_data(show_spinner=False)
+def veri_yukle_cache():
+    from data_loader import veri_yukle
+    return veri_yukle()
+
+
+@st.cache_data(show_spinner=False)
+def eksik_analiz_cache():
+    from preprocessor import eksik_veri_tam_analiz
+    return eksik_veri_tam_analiz(veri_yukle_cache())
+
+
+@st.cache_data(show_spinner=False)
+def little_cache():
+    from preprocessor import little_mcar_testi
+    return little_mcar_testi(veri_yukle_cache())
+
+
+SINYAL_ETIKETI = {
+    'MCAR': '🟢 MCAR ile tutarlı',
+    'MAR' : '🟡 MAR şüphesi',
+}
+
+
+def eksiklik_ozeti_goster():
+    """
+    Eksik veri mekanizması özet tablosu + test sonucuna göre üretilen karar
+    metni. EDA ve Preprocessing sekmeleri ortak kullanır; sayılar ve
+    sonuç her zaman hesaplanan analizden gelir.
+    """
+    import pandas as pd
+
+    df     = veri_yukle_cache()
+    analiz = eksik_analiz_cache()
+    little = little_cache()
+
+    satirlar = []
+    for kolon, bilgi in analiz.items():
+        en_kucuk_p = bilgi['tablo']['p (Welch)'].min()
+        satirlar.append({
+            'Kolon'               : kolon,
+            'Eksik'               : bilgi['eksik_say'],
+            'Oran'                : f"%{bilgi['eksik_say'] / len(df) * 100:.1f}",
+            'En küçük p (Welch)'  : round(float(en_kucuk_p), 3),
+            'Eksiklik~Hedef p (χ²)': round(float(bilgi['hedef_p']), 3),
+            'Sonuç'               : SINYAL_ETIKETI[bilgi['sinyal']],
+        })
+    st.dataframe(pd.DataFrame(satirlar), use_container_width=True, hide_index=True)
+
+    mcar_red = little['p'] < 0.05
+    st.markdown(
+        f"**Little MCAR testi:** χ² = {little['chi2']:.2f}, sd = {little['sd']}, "
+        f"p = {little['p']:.3f} ({little['desen_sayisi']} eksiklik deseni) → "
+        + ('**MCAR reddedildi.**' if mcar_red else 'MCAR reddedilemedi.')
+    )
+
+    tum_mcar = all(b['sinyal'] == 'MCAR' for b in analiz.values())
+    if tum_mcar and not mcar_red:
+        st.success(
+            'Eksiklik, gözlenen özelliklerle ve hedef değişkenle ilişkili değil; '
+            'veri **MCAR ile tutarlı**. Bu yüzden tek bir global imputation '
+            'yöntemi tüm kolonlara uygulanıyor.'
+        )
+    else:
+        iliskili = {k: b['iliskili'] for k, b in analiz.items() if b['iliskili']}
+        st.warning(
+            'Eksiklik bazı gözlenen değişkenlerle ilişkili görünüyor (MAR şüphesi): '
+            + '; '.join(f'{k} ↔ {", ".join(v)}' for k, v in iliskili.items())
+            + '. Basit imputation yanlılık getirebilir; KNN gibi çok değişkenli '
+            'yöntemler tercih edilmeli.'
+        )
+    st.caption(
+        'Yöntem: her eksik kolon için diğer 8 özellikte Welch t-testi '
+        '(Bonferroni düzeltmeli, α = 0.05) ve eksiklik göstergesi ile Potability '
+        'arasında χ² testi; tüm veri için Little (1988) testi (EM tahmini, '
+        'çok değişkenli normallik varsayımı). Bu testler MCAR\'ı kanıtlamaz, '
+        'yalnızca reddedemez; MNAR gözlenen veriden test edilemez.'
+    )
 
 
 # ─────────────────────────────────────────

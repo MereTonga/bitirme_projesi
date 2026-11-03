@@ -33,7 +33,7 @@ eksik_veri_tam_analiz = importlib.import_module('preprocessor').eksik_veri_tam_a
 sonuclar = eksik_veri_tam_analiz(df)
 assert len(sonuclar) == 3, 'Hata: 3 kolon analiz edilmeli!'
 for kolon, bilgi in sonuclar.items():
-    assert bilgi['sinyal'] in ['MCAR', 'MAR/MNAR'], 'Hata: Geçersiz sinyal!'
+    assert bilgi['sinyal'] in ['MCAR', 'MAR'], 'Hata: Geçersiz sinyal!'
     print(f"      OK — {kolon}: {bilgi['sinyal']} ({bilgi['eksik_say']} eksik)")
 
 # ── 3. Outlier Analizi ───────────────────────────────────────

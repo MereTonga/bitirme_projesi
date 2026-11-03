@@ -2,25 +2,15 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-from ui_ortak import RENKLER, OZELLIK_KOLONLARI
+from ui_ortak import (
+    RENKLER, OZELLIK_KOLONLARI, SINYAL_ETIKETI,
+    veri_yukle_cache, eksik_analiz_cache, eksiklik_ozeti_goster,
+)
 
 
 # ─────────────────────────────────────────
 # VERİ YÜKLE — Cache ile
 # ─────────────────────────────────────────
-
-@st.cache_data
-def veri_yukle_cache():
-    from data_loader import veri_yukle
-    return veri_yukle()
-
-
-@st.cache_data
-def eksik_analiz_cache():
-    from preprocessor import eksik_veri_tam_analiz
-    df = veri_yukle_cache()
-    return eksik_veri_tam_analiz(df)
-
 
 @st.cache_data
 def outlier_analiz_cache():
@@ -73,7 +63,8 @@ def goster():
         | 🟢 İçilebilir (1) | {dagilim[1]:,} | %{dagilim[1]/len(df)*100:.1f} |
         """)
         st.info(
-            '**Sınıf Dengesizliği:** %61/%39 oranında dengesizlik '
+            f'**Sınıf Dengesizliği:** %{dagilim[0]/len(df)*100:.0f}/'
+            f'%{dagilim[1]/len(df)*100:.0f} oranında dengesizlik '
             'var. Model eğitiminde SMOTE veya class_weight '
             'kullanılması önerilir.'
         )
@@ -108,29 +99,12 @@ def goster():
 
     eksik_sonuclar = eksik_analiz_cache()
 
-    col1, col2, col3 = st.columns(3)
-    sutunlar = [col1, col2, col3]
-
-    for i, (kolon, bilgi) in enumerate(eksik_sonuclar.items()):
-        with sutunlar[i]:
-            renk = 'normal'
-            st.metric(
-                kolon,
-                f"{bilgi['eksik_say']} eksik",
-                f"%{bilgi['eksik_say']/len(df)*100:.1f}"
-            )
-            sinyal_renk = '🟢' if bilgi['sinyal'] == 'MCAR' else '🟡'
-            st.caption(f"{sinyal_renk} Sinyal: **{bilgi['sinyal']}**")
-
-    st.info(
-        '**Not:** Tüm eksik kolonlar MCAR (Tamamen Rastlantısal) '
-        'olarak tespit edildi. Tek bir global imputation yöntemi '
-        'tüm kolonlara güvenle uygulanabilir.'
-    )
+    eksiklik_ozeti_goster()
 
     with st.expander('📋 Detaylı Eksik Veri Karşılaştırması'):
         for kolon, bilgi in eksik_sonuclar.items():
-            st.markdown(f'**{kolon}** — {bilgi["sinyal"]}')
+            ek = f' (ilişkili: {", ".join(bilgi["iliskili"])})' if bilgi['iliskili'] else ''
+            st.markdown(f'**{kolon}** — {SINYAL_ETIKETI[bilgi["sinyal"]]}{ek}')
             st.dataframe(
                 bilgi['tablo'].style.background_gradient(
                     subset=['Fark %'], cmap='RdYlGn_r'
