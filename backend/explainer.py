@@ -21,6 +21,20 @@ TREE_MODELLER = {
 }
 
 
+def _shap_degerleri(explainer, X):
+    """shap_values; KernelExplainer'ın örnek başı tqdm çubuğu kapatılır (log kirliliği)."""
+    if isinstance(explainer, shap.KernelExplainer):
+        return explainer.shap_values(X, silent=True)
+    return explainer.shap_values(X)
+
+
+def yontem_adi(model_adi, model_turu='ml'):
+    """Kullanılan SHAP yöntemi (arayüzde gösterilir)."""
+    if model_turu == 'dl':
+        return 'GradientExplainer'
+    return 'TreeExplainer' if model_adi in TREE_MODELLER else 'KernelExplainer'
+
+
 def _background(X, n, seed=RANDOM_STATE):
     """Background verisinden tekrar üretilebilir rastgele alt küme."""
     X = np.asarray(X)
@@ -98,7 +112,7 @@ def tek_ornek_shap(explainer, X_ornek, model_adi=None):
          'ozellik_isimleri': [9], 'ozellik_degerleri': [9]}
     """
     X_ornek = np.asarray(X_ornek, dtype=float)
-    shap_pozitif = _pozitif_sinif(explainer.shap_values(X_ornek))[0]
+    shap_pozitif = _pozitif_sinif(_shap_degerleri(explainer, X_ornek))[0]
     return {
         'shap_degerleri'   : [float(v) for v in shap_pozitif],
         'beklenen_deger'   : _beklenen(explainer),
@@ -120,7 +134,7 @@ def ozet_shap(explainer, X_test, model_adi=None):
          'onem_sirasi': [9], 'n_ornek': int}
     """
     X_test = np.asarray(X_test, dtype=float)
-    shap_pozitif = _pozitif_sinif(explainer.shap_values(X_test))
+    shap_pozitif = _pozitif_sinif(_shap_degerleri(explainer, X_test))
     ort_abs = np.abs(shap_pozitif).mean(axis=0)
     sira    = np.argsort(ort_abs)[::-1]
     return {
@@ -189,7 +203,8 @@ def ann_shap(model, X_train, X_ornek, device=None, n_background=100):
     X_tensor   = torch.tensor(np.asarray(X_ornek), dtype=torch.float32).to(device)
 
     with torch.no_grad():
-        beklenen = float(sarmal(background).mean().item())
+        beklenen      = float(sarmal(background).mean().item())
+        model_tahmini = float(sarmal(X_tensor)[0, 0].item())
 
     explainer = shap.GradientExplainer(sarmal, background)
     shap_vals = explainer.shap_values(X_tensor)
@@ -201,5 +216,6 @@ def ann_shap(model, X_train, X_ornek, device=None, n_background=100):
         'shap_degerleri'   : [float(v) for v in shap_pozitif],
         'beklenen_deger'   : beklenen,
         'ozellik_isimleri' : OZELLIK_KOLONLARI,
-        'ozellik_degerleri': [float(v) for v in np.asarray(X_ornek)[0]]
+        'ozellik_degerleri': [float(v) for v in np.asarray(X_ornek)[0]],
+        'model_tahmini'    : model_tahmini,
     }

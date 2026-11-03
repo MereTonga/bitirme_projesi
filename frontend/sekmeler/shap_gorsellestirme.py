@@ -71,6 +71,45 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
     return fig
 
 
+YONTEM_ACIKLAMASI = {
+    'TreeExplainer'    : 'ağaç yapısından kesin hesap',
+    'KernelExplainer'  : 'model-bağımsız, verimlilik kısıtıyla toplam birebir korunur',
+    'GradientExplainer': 'beklenen gradyanlar, örneklemeye dayalı yaklaşık hesap',
+}
+
+
+def shap_dogrulama_goster(aciklama):
+    """
+    Waterfall altına doğrulama satırı: modelin kendi tahmini ile
+    beklenen + Σ SHAP karşılaştırılır.
+    """
+    import streamlit as st
+
+    tahmin = aciklama.get('model_tahmini')
+    final  = aciklama['waterfall']['final']
+    yontem = aciklama.get('yontem', '?')
+    if tahmin is None:
+        return
+
+    fark = final - tahmin
+    st.markdown(
+        f'**Model tahmini:** {tahmin:.4f} · '
+        f'**SHAP toplamı** (beklenen {aciklama["beklenen_deger"]:.4f} + Σ katkı): {final:.4f} · '
+        f'**fark:** {fark:+.4f}'
+    )
+    aciklama_metni = (
+        f'Yöntem: **{yontem}** ({YONTEM_ACIKLAMASI.get(yontem, "")}), '
+        f'{aciklama.get("n_background", "?")} background örneği.'
+    )
+    if abs(fark) < 0.005:
+        st.caption(f'✅ SHAP katkıları modelin tahminini tam olarak açıklıyor. {aciklama_metni}')
+    else:
+        st.caption(
+            f'ℹ️ Fark yöntemin yaklaşıklığından kaynaklanır, model hatası değildir. '
+            f'{aciklama_metni} Background örnek sayısını artırmak farkı genelde küçültür.'
+        )
+
+
 # ─────────────────────────────────────────
 # 2. ÖZET BAR PLOT (Feature Importance)
 # ─────────────────────────────────────────

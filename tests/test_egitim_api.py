@@ -200,21 +200,26 @@ def _acikla(istemci, dosya_adi, tur, **ek):
     return gov
 
 
-@pytest.mark.parametrize('yol,payload,tol', [
-    ('/train/ml/random_forest',     {'n_estimators': 10, 'max_depth': 4}, 0.02),
-    ('/train/ml/xgboost',           {'n_estimators': 10, 'max_depth': 3}, 0.02),
-    ('/train/ml/lightgbm',          {'n_estimators': 10},                 0.02),
-    ('/train/ml/gradient_boosting', {'n_estimators': 10, 'max_depth': 2}, 0.02),
-    ('/train/ml/adaboost',          {'n_estimators': 10},                 0.10),   # KernelExplainer (yaklaşık)
-    ('/train/ml/naive_bayes',       {},                                   0.10),   # KernelExplainer (yaklaşık)
+@pytest.mark.parametrize('yol,payload,yontem', [
+    ('/train/ml/random_forest',     {'n_estimators': 10, 'max_depth': 4}, 'TreeExplainer'),
+    ('/train/ml/xgboost',           {'n_estimators': 10, 'max_depth': 3}, 'TreeExplainer'),
+    ('/train/ml/lightgbm',          {'n_estimators': 10},                 'TreeExplainer'),
+    ('/train/ml/gradient_boosting', {'n_estimators': 10, 'max_depth': 2}, 'TreeExplainer'),
+    ('/train/ml/adaboost',          {'n_estimators': 10},                 'KernelExplainer'),
+    ('/train/ml/naive_bayes',       {},                                   'KernelExplainer'),
 ])
-def test_shap_olasilik_uzayinda_tutarli(istemci, yol, payload, tol):
-    """beklenen + Σ shap ≈ modelin /predict olasılığı (olasılık uzayı, tüm aileler)."""
+def test_shap_olasilik_uzayinda_tutarli(istemci, yol, payload, yontem):
+    """
+    beklenen + Σ shap = modelin olasılığı. Tree (interventional) ve Kernel
+    (verimlilik kısıtı) yöntemlerinde eşitlik birebirdir.
+    """
     m   = _egit(istemci, yol, payload)
     gov = _acikla(istemci, m['dosya_adi'], 'ml', n_background=30)
     p   = _tahmin_olasiligi(istemci, m['dosya_adi'], 'ml')
+    assert gov['yontem'] == yontem and gov['n_background'] == 30
     assert 0.0 <= gov['beklenen_deger'] <= 1.0
-    assert abs(gov['waterfall']['final'] - p) < tol, (gov['waterfall']['final'], p)
+    assert abs(gov['waterfall']['final'] - gov['model_tahmini']) < 1e-4
+    assert abs(gov['model_tahmini'] - p) < 1e-3          # /predict 4 haneye yuvarlar
 
 
 def test_shap_ozet_tree_ve_kernel_siniri(istemci):
@@ -234,6 +239,8 @@ def test_shap_aciklama_ann(istemci):
     gov = _acikla(istemci, ann['dosya_adi'], 'dl', n_background=50)
     p   = _tahmin_olasiligi(istemci, ann['dosya_adi'], 'dl')
     assert 0.0 < gov['beklenen_deger'] < 1.0                  # artık sabit 0.0 değil
+    assert gov['yontem'] == 'GradientExplainer'
+    assert abs(gov['model_tahmini'] - p) < 1e-3
     assert abs(gov['waterfall']['final'] - p) < 0.10          # GradientExplainer yaklaşık
 
 

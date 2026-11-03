@@ -49,6 +49,11 @@ class AciklamaYaniti(BaseModel):
     waterfall        : dict
     model_adi        : str
     goruntu_adi      : str
+    # Doğrulama: beklenen + Σ shap ile modelin kendi tahmini karşılaştırılır.
+    # Tree/Kernel'de birebir eşittir; GradientExplainer (ANN) yaklaşıktır.
+    model_tahmini    : float
+    yontem           : str               # TreeExplainer | KernelExplainer | GradientExplainer
+    n_background     : int               # gerçekten kullanılan background örnek sayısı
 
 
 class OzetAciklamaYaniti(BaseModel):
@@ -115,7 +120,8 @@ def tek_ornek_acikla(istek: AciklamaIstek):
     paket, pipe = _paket_getir(istek.dosya_adi)
     try:
         from explainer import (
-            explainer_olustur, tek_ornek_shap, waterfall_verisi_hazirla, ann_shap
+            explainer_olustur, tek_ornek_shap, waterfall_verisi_hazirla, ann_shap,
+            yontem_adi
         )
         X_ornek     = _ornek_donustur(istek.su_parametreleri, pipe)
         X_train, _  = _egitim_verisi(paket)
@@ -132,6 +138,7 @@ def tek_ornek_acikla(istek: AciklamaIstek):
             exp        = explainer_olustur(model_adi, paket['model'], X_train,
                                            n_background=istek.n_background)
             shap_sonuc = tek_ornek_shap(exp, X_ornek, model_adi)
+            shap_sonuc['model_tahmini'] = float(paket['model'].predict_proba(X_ornek)[0, 1])
 
         return AciklamaYaniti(
             shap_degerleri    = shap_sonuc['shap_degerleri'],
@@ -140,7 +147,10 @@ def tek_ornek_acikla(istek: AciklamaIstek):
             ozellik_degerleri = shap_sonuc['ozellik_degerleri'],
             waterfall         = waterfall_verisi_hazirla(shap_sonuc),
             model_adi         = model_adi,
-            goruntu_adi       = gor_adi
+            goruntu_adi       = gor_adi,
+            model_tahmini     = shap_sonuc['model_tahmini'],
+            yontem            = yontem_adi(model_adi, paket.get('model_turu', 'ml')),
+            n_background      = min(istek.n_background, len(X_train)),
         )
     except HTTPException:
         raise

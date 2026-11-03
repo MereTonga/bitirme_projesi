@@ -375,16 +375,29 @@ def goster():
                 # SHAP Waterfall
                 st.divider()
                 st.markdown('**🔍 Bu Tahmini Açıkla (SHAP)**')
-                shap_btn = st.button(
-                    '🔍 SHAP Waterfall Hesapla',
-                    key='garaj_shap_btn'
-                )
+                sc1, sc2 = st.columns([2, 1])
+                with sc1:
+                    n_background = st.slider(
+                        'Background örnek sayısı', 10, 500, 100, step=10,
+                        key  = 'garaj_n_background',
+                        help = 'SHAP\'ın karşılaştırma tabanı (beklenen değer) bu kadar '
+                               'eğitim örneğinden hesaplanır. Fazlası daha kararlı '
+                               'açıklama verir; KNN/SVM gibi Kernel modellerinde süre '
+                               'yaklaşık doğrusal artar (SVM, 300 örnekte ~8 sn).'
+                    )
+                with sc2:
+                    st.write('')
+                    shap_btn = st.button(
+                        '🔍 SHAP Waterfall Hesapla',
+                        key='garaj_shap_btn'
+                    )
                 if shap_btn:
                     with st.spinner('SHAP hesaplanıyor...'):
                         shap_sonuc = tek_ornek_acikla(
                             dosya_adi        = girdi['dosya_adi'],
                             model_turu       = girdi['model_turu'],
-                            su_parametreleri = girdi['su_parametreleri']
+                            su_parametreleri = girdi['su_parametreleri'],
+                            n_background     = n_background
                         )
                     if 'hata' in shap_sonuc:
                         st.error(f'SHAP hatası: {shap_sonuc["hata"]}')
@@ -393,7 +406,7 @@ def goster():
 
                 if st.session_state.get('garaj_shap'):
                     shap_s = st.session_state['garaj_shap']
-                    from sekmeler.shap_gorsellestirme import waterfall_plot
+                    from sekmeler.shap_gorsellestirme import waterfall_plot, shap_dogrulama_goster
                     fig_wf = waterfall_plot(
                         shap_s['waterfall'],
                         baslik=f'{shap_s["goruntu_adi"]} — SHAP Waterfall'
@@ -403,6 +416,7 @@ def goster():
                         'Her çubuğun yüksekliği o özelliğin '
                         'tahmini ne kadar etkilediğini gösterir.'
                     )
+                    shap_dogrulama_goster(shap_s)
 
     # ══════════════════════════════════════════════════════════
     # SEKME 3: TOPLU TAHMİN
