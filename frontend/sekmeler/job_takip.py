@@ -1,6 +1,14 @@
-import time
+"""
+Asenkron job (arka plan eğitimi / optimizasyonu) takibi.
+
+Takip bir Streamlit fragment'ı içinde yapılır: yalnızca ilerleme bölümü
+birkaç saniyede bir yeniden çalışır, sayfanın geri kalanı bloklanmaz.
+Job bittiğinde (başarı ya da hata) sonuç session_state'e yazılır ve tüm
+uygulama bir kez yeniden çalıştırılır; böylece sonuç ekranı çizilir ve
+fragment durur.
+"""
 import streamlit as st
-from api_client import job_durum
+from api_client import job_durum, job_listesi
 
 DURUM_EMOJI = {
     'bekliyor'  : '⏳',
@@ -9,119 +17,113 @@ DURUM_EMOJI = {
     'hata'      : '❌'
 }
 
+DURUM_RENK = {
+    'bekliyor'  : '🟡',
+    'calisiyor' : '🔵',
+    'tamamlandi': '🟢',
+    'hata'      : '🔴'
+}
 
-def job_progress_goster(
-    job_id         : str,
-    polling_araligi: float = 1.5,
-    max_bekleme    : int   = 600
+POLLING_ARALIGI = 2  # saniye
+
+
+def _ilerleme_ciz(job: dict, job_id: str):
+    durum    = job.get('durum', 'bekliyor')
+    ilerleme = job.get('ilerleme', 0) or 0
+    meta     = job.get('meta') or {}
+
+    st.markdown(
+        f'**{DURUM_EMOJI.get(durum, "⏳")} '
+        f'{str(meta.get("model_adi", "")).upper()}** — Job: `{job_id}`'
+    )
+    st.progress(min(max(ilerleme, 0), 100) / 100)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric('İlerleme',   f'%{ilerleme}')
+    c2.metric('Geçen Süre', f'{job.get("gecen_sure", 0)}s')
+    c3.metric('Durum',      f'{DURUM_RENK.get(durum, "⚪")} {durum}')
+
+    if job.get('mesaj'):
+        st.caption(f'💬 {job["mesaj"]}')
+
+
+def job_takibi(
+    job_anahtari  : str,
+    sonuc_anahtari: str,
+    basari_mesaji : str   = '✅ Eğitim tamamlandı!',
+    temizlenecek  : tuple = ()
 ):
     """
-    Job tamamlanana kadar canlı progress bar gösterir.
-    st.empty() ile her polling'de güncellenir.
+    session_state[job_anahtari]'ndaki job'u bloklamadan takip eder.
 
-    Parametreler:
-        job_id          : Takip edilecek job
-        polling_araligi : Kaç saniyede bir kontrol (saniye)
-        max_bekleme     : Maksimum bekleme süresi (saniye)
+    Job tamamlanınca:  session_state[sonuc_anahtari] = job['sonuc']
+    Job hata verince / kaybolunca: kullanıcıya kalıcı mesaj gösterilir.
+    Her iki durumda job_anahtari temizlenir. Başarıda `temizlenecek`teki
+    anahtarlar (ör. önceki modelin SHAP özeti) None yapılır.
 
-    Döndürür:
-        son_job: Tamamlanan job dict'i veya None (hata/timeout)
+    Her sekme kendi anahtarlarını verir (ör. 'aktif_job_id' → 'son_ml_sonuc').
     """
-    konteyner    = st.empty()
-    gecen        = 0
-    son_job      = None
+    mesaj_anahtari = f'{job_anahtari}__mesaj'
 
-    while gecen < max_bekleme:
+    # Önceki job'dan kalan sonuç mesajı (tek seferlik gösterilir)
+    if mesaj_anahtari in st.session_state:
+        tur, metin = st.session_state.pop(mesaj_anahtari)
+        getattr(st, tur)(metin)
+
+    job_id = st.session_state.get(job_anahtari)
+    if not job_id:
+        return
+
+    def _bitir(tur: str, metin: str):
+        st.session_state[job_anahtari]   = None
+        st.session_state[mesaj_anahtari] = (tur, metin)
+        st.rerun()   # tüm uygulama: sonuç ekranı çizilir, fragment durur
+
+    @st.fragment(run_every=POLLING_ARALIGI)
+    def _takip():
         job = job_durum(job_id)
 
-        if not job or 'hata' in job:
-            konteyner.error(
-                f'Job bilgisi alınamadı: {job_id}'
-            )
-            return None
+        if 'hata' in job:
+            if job.get('durum_kodu') == 404:
+                # Backend yeniden başlatıldı ya da eski job temizlendi
+                _bitir('warning',
+                       f'⚠️ Job artık bulunamıyor (`{job_id}`). Backend yeniden '
+                       f'başlatılmış olabilir; eğitimi tekrar başlatın.')
+            # Geçici bağlantı sorunu: takibi bırakma, sonraki turda tekrar dene
+            st.warning(f'Job durumu alınamadı, tekrar denenecek: {job["hata"]}')
+            return
 
-        durum    = job.get('durum', 'bekliyor')
-        ilerleme = job.get('ilerleme', 0)
-        mesaj    = job.get('mesaj', '')
-        sure     = job.get('gecen_sure', 0)
-        emoji    = DURUM_EMOJI.get(durum, '⏳')
-        meta     = job.get('meta', {})
-
-        # Canlı güncelleme
-        with konteyner.container():
-            # Başlık
-            st.markdown(
-                f'**{emoji} {meta.get("model_adi", "").upper()}** '
-                f'— Job: `{job_id}`'
-            )
-
-            # Progress bar
-            st.progress(ilerleme / 100)
-
-            # Detay satırı
-            dc1, dc2, dc3 = st.columns(3)
-            with dc1:
-                st.metric('İlerleme', f'%{ilerleme}')
-            with dc2:
-                st.metric('Geçen Süre', f'{sure}s')
-            with dc3:
-                durum_renk = {
-                    'bekliyor'  : '🟡',
-                    'calisiyor' : '🔵',
-                    'tamamlandi': '🟢',
-                    'hata'      : '🔴'
-                }.get(durum, '⚪')
-                st.metric('Durum', f'{durum_renk} {durum}')
-
-            # Mesaj
-            st.caption(f'💬 {mesaj}')
-
-        # Tamamlandı mı?
+        durum = job.get('durum')
         if durum == 'tamamlandi':
-            son_job = job
-            time.sleep(0.5)  # Son görüntü için kısa bekleme
-            konteyner.empty()
-            return son_job
+            st.session_state[sonuc_anahtari] = job.get('sonuc')
+            for anahtar in temizlenecek:
+                st.session_state[anahtar] = None
+            _bitir('success', basari_mesaji)
+        elif durum == 'hata':
+            _bitir('error',
+                   f'❌ İşlem başarısız: {job.get("hata_mesaji") or "Bilinmeyen hata"}')
 
-        if durum == 'hata':
-            with konteyner.container():
-                st.error(
-                    f'❌ Eğitim başarısız!\n\n'
-                    f'{job.get("hata_mesaji", "Bilinmeyen hata")}'
-                )
-            return None
+        st.markdown('**📊 Canlı İlerleme:**')
+        _ilerleme_ciz(job, job_id)
 
-        time.sleep(polling_araligi)
-        gecen += polling_araligi
-
-    # Timeout
-    konteyner.warning(
-        f'⚠️ {max_bekleme}s beklendi ama eğitim tamamlanmadı. '
-        f'Job ID: `{job_id}` — Daha sonra kontrol edin.'
-    )
-    return None
+    _takip()
 
 
 def aktif_joblar_goster():
-    """
-    Sidebar veya expander'da aktif job'ları gösterir.
-    """
-    from api_client import job_listesi
-
-    joblar = job_listesi(limit=5)
-    if not joblar:
-        return
-
-    calisan = [j for j in joblar if j['durum'] == 'calisiyor']
+    """Sidebar'da çalışan job'ları özetler (her tam yeniden çalıştırmada güncellenir)."""
+    calisan = [
+        j for j in job_listesi(limit=5)
+        if j.get('durum') in ('bekliyor', 'calisiyor')
+    ]
     if not calisan:
         return
 
     st.sidebar.markdown('---')
     st.sidebar.markdown('**🔄 Aktif Eğitimler**')
     for job in calisan:
-        st.sidebar.progress(job['ilerleme'] / 100)
+        ilerleme = job.get('ilerleme', 0) or 0
+        st.sidebar.progress(ilerleme / 100)
         st.sidebar.caption(
-            f"`{job['meta'].get('model_adi','?')}` "
-            f"— %{job['ilerleme']} "
-            f"({job['gecen_sure']}s)"
+            f"`{(job.get('meta') or {}).get('model_adi', '?')}` "
+            f"— %{ilerleme} ({job.get('gecen_sure', 0)}s)"
         )

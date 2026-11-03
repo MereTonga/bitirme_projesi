@@ -6,50 +6,62 @@ from typing import Optional
 API_URL = os.environ.get('API_URL', 'http://localhost:8000').rstrip('/')
 
 
-def _post(endpoint: str, payload: dict) -> dict:
-    """POST isteği gönderir, hata yönetimi yapar."""
+def _hata_detayi(r: requests.Response) -> str:
+    """
+    Backend'in hata yanıtını okunur metne çevirir.
+
+    FastAPI HTTPException → {'detail': 'mesaj'}
+    Pydantic doğrulama (422) → {'detail': [{'loc': [...], 'msg': '...'}, ...]}
+    """
     try:
-        r = requests.post(f'{API_URL}{endpoint}', json=payload, timeout=300)
-        r.raise_for_status()
-        return r.json()
+        detay = r.json().get('detail')
+    except Exception:
+        detay = None
+
+    if isinstance(detay, list):
+        satirlar = []
+        for d in detay:
+            alan = '.'.join(str(p) for p in d.get('loc', []) if p != 'body')
+            satirlar.append(f"{alan}: {d.get('msg', '')}" if alan else d.get('msg', ''))
+        return '; '.join(satirlar) or f'HTTP {r.status_code}'
+    if detay:
+        return str(detay)
+    return f'HTTP {r.status_code} {r.reason}'
+
+
+def _istek(yontem: str, endpoint: str, timeout: float, **kwargs) -> dict | list:
+    """
+    Backend'e istek gönderir. Başarıda JSON gövdeyi, hatada
+    {'hata': mesaj, 'durum_kodu': int | None} döndürür; hiç exception fırlatmaz.
+    """
+    try:
+        r = requests.request(yontem, f'{API_URL}{endpoint}', timeout=timeout, **kwargs)
     except requests.exceptions.ConnectionError:
-        return {'hata': 'API bağlantısı kurulamadı. Backend çalışıyor mu?'}
+        return {'hata': 'API bağlantısı kurulamadı. Backend çalışıyor mu?', 'durum_kodu': None}
     except requests.exceptions.Timeout:
-        return {'hata': 'İstek zaman aşımına uğradı.'}
-    except requests.exceptions.HTTPError as e:
-        try:
-            detay = r.json().get('detail', str(e))
-        except Exception:
-            detay = str(e)
-        return {'hata': detay}
-    except Exception as e:
-        return {'hata': str(e)}
+        return {'hata': f'İstek zaman aşımına uğradı ({timeout:.0f} sn).', 'durum_kodu': None}
+    except requests.exceptions.RequestException as e:
+        return {'hata': str(e), 'durum_kodu': None}
+
+    if not r.ok:
+        return {'hata': _hata_detayi(r), 'durum_kodu': r.status_code}
+    try:
+        return r.json()
+    except ValueError:
+        return {'hata': 'Backend geçersiz yanıt döndürdü.', 'durum_kodu': r.status_code}
+
+
+def _post(endpoint: str, payload: dict) -> dict:
+    # Senkron eğitim/optimizasyon uzun sürebilir → geniş zaman aşımı
+    return _istek('POST', endpoint, timeout=300, json=payload)
 
 
 def _get(endpoint: str, params: dict = None) -> dict | list:
-    """GET isteği gönderir, hata yönetimi yapar."""
-    try:
-        r = requests.get(
-            f'{API_URL}{endpoint}',
-            params  = params,
-            timeout = 30
-        )
-        r.raise_for_status()
-        return r.json()
-    except requests.exceptions.ConnectionError:
-        return {'hata': 'API bağlantısı kurulamadı.'}
-    except Exception as e:
-        return {'hata': str(e)}
+    return _istek('GET', endpoint, timeout=30, params=params)
 
 
 def _delete(endpoint: str) -> dict:
-    """DELETE isteği gönderir."""
-    try:
-        r = requests.delete(f'{API_URL}{endpoint}', timeout=30)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        return {'hata': str(e)}
+    return _istek('DELETE', endpoint, timeout=30)
 
 
 # ─────────────────────────────────────────
@@ -158,16 +170,11 @@ def db_model_istatistik() -> dict:
 
 
 def model_notu_guncelle_api(dosya_adi: str, not_metni: str) -> dict:
-    try:
-        r = requests.put(
-            f'{API_URL}/db/modeller/{dosya_adi}/not',
-            params  = {'not_metni': not_metni},
-            timeout = 10
-        )
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        return {'hata': str(e)}
+    return _istek(
+        'PUT', f'/db/modeller/{dosya_adi}/not',
+        timeout = 10,
+        params  = {'not_metni': not_metni}
+    )
 
 
 # ─────────────────────────────────────────

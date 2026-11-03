@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
-from api_client import ann_egit, egitim_gecmisi, async_ann_egit, job_durum
+from api_client import ann_egit, egitim_gecmisi, async_ann_egit
+from sekmeler.job_takip import job_takibi
 from ui_ortak import RENKLER, preprocessing_paneli, egitim_egrisi_goster
 
 
@@ -243,34 +244,11 @@ def goster():
                     f'İlerlemeyi aşağıdan takip edin.'
                 )
 
-    # Async DL job takibi
-    if st.session_state.get('dl_aktif_job_id'):
-        job_id  = st.session_state['dl_aktif_job_id']
-        mevcut  = job_durum(job_id)
-
-        if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
-            st.markdown('**📊 Canlı İlerleme:**')
-            from sekmeler.job_takip import job_progress_goster
-            tamamlanan = job_progress_goster(job_id)
-            if tamamlanan and tamamlanan.get('sonuc'):
-                st.session_state['son_dl_sonuc'] = tamamlanan['sonuc']
-                st.session_state['dl_aktif_job_id'] = None
-                st.success('✅ ANN eğitimi tamamlandı!')
-                st.rerun()
-
-        elif mevcut and mevcut['durum'] == 'tamamlandi':
-            st.success(
-                f'✅ ANN tamamlandı! '
-                f'ROC-AUC: {mevcut["sonuc"]["roc_auc"]}'
-            )
-            if st.button('Sonuçları Göster', key='dl_async_sonuc_btn'):
-                st.session_state['son_dl_sonuc'] = mevcut['sonuc']
-                st.session_state['dl_aktif_job_id'] = None
-                st.rerun()
-
-        elif mevcut and mevcut['durum'] == 'hata':
-            st.error(f'❌ ANN eğitimi başarısız: {mevcut.get("hata_mesaji")}')
-            st.session_state['dl_aktif_job_id'] = None
+    # Asenkron DL job takibi
+    job_takibi(
+        'dl_aktif_job_id', 'son_dl_sonuc',
+        basari_mesaji = '✅ ANN eğitimi tamamlandı!'
+    )
 
     # ── Sonuçları Göster ──────────────────────────────────────
     if st.session_state.get('son_dl_sonuc'):

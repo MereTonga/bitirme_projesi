@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
-from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi, async_ml_egit, job_durum
+from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi, async_ml_egit
+from sekmeler.job_takip import job_takibi
 from ui_ortak import RENKLER, preprocessing_paneli
 
 
@@ -497,37 +498,11 @@ def goster():
                     f'Takip URL: `{job_yanit["takip_url"]}`'
                 )
 
-        # Aktif job varsa takip et
-        if st.session_state.get('aktif_job_id'):
-            job_id = st.session_state['aktif_job_id']
-            mevcut = job_durum(job_id)
-
-            if mevcut and mevcut['durum'] not in ['tamamlandi', 'hata']:
-                st.markdown('**📊 Canlı İlerleme:**')
-                from sekmeler.job_takip import job_progress_goster
-                tamamlanan = job_progress_goster(job_id)
-                if tamamlanan and tamamlanan.get('sonuc'):
-                    st.session_state['son_ml_sonuc'] = tamamlanan['sonuc']
-                    st.session_state['aktif_job_id'] = None
-                    st.success('✅ Eğitim tamamlandı!')
-                    st.rerun()
-
-            elif mevcut and mevcut['durum'] == 'tamamlandi':
-                st.success(
-                    f'✅ Tamamlandı! '
-                    f'ROC-AUC: {mevcut["sonuc"]["roc_auc"]}'
-                )
-                if st.button('Sonuçları Göster', key='async_sonuc_btn'):
-                    st.session_state['son_ml_sonuc'] = mevcut['sonuc']
-                    st.session_state['aktif_job_id'] = None
-                    st.rerun()
-
-            elif mevcut and mevcut['durum'] == 'hata':
-                st.error(
-                    f'❌ Eğitim başarısız: '
-                    f'{mevcut.get("hata_mesaji", "")}'
-                )
-                st.session_state['aktif_job_id'] = None
+    # ── Asenkron job takibi (mod değişse de sürer) ────────────
+    job_takibi(
+        'aktif_job_id', 'son_ml_sonuc',
+        temizlenecek = ('son_ml_shap_ozet',)
+    )
 
     # ══════════════════════════════════════════════════════════
     # EĞİTİM SONUÇLARI (Her iki mod için ortak)
