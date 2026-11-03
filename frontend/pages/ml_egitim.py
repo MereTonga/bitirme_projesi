@@ -401,7 +401,8 @@ def goster():
             else:
                 st.success(
                     f'✅ Optimizasyon tamamlandı! '
-                    f'En iyi ROC-AUC: **{opt_sonuc["en_iyi_auc"]:.4f}**'
+                    f'En iyi CV ROC-AUC: **{opt_sonuc["en_iyi_auc"]:.4f}** '
+                    f'(test: {opt_sonuc.get("test_auc", float("nan")):.4f})'
                 )
                 st.session_state['son_opt_sonuc'] = opt_sonuc
 
@@ -412,7 +413,8 @@ def goster():
             # Özet kartlar
             ok1, ok2, ok3 = st.columns(3)
             with ok1:
-                st.metric('🏆 En İyi AUC', f"{opt['en_iyi_auc']:.4f}")
+                st.metric('🏆 En İyi CV AUC', f"{opt['en_iyi_auc']:.4f}",
+                          help=f"{opt.get('cv_fold', 5)}-fold stratified CV ortalaması; test seti aramaya girmez.")
             with ok2:
                 st.metric('🔄 Trial Sayısı', opt['toplam_trial'])
             with ok3:

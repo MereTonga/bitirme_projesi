@@ -16,7 +16,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 from data_loader        import veri_yukle
-from pipeline_builder   import veri_hazirla
+from pipeline_builder   import veri_hazirla, ham_split
 from ml.evaluator       import model_degerlendir
 from garage_manager     import model_kaydet
 from schemas.ml_schemas import (
@@ -267,27 +267,30 @@ def optimize_et(istek: OptimizasyonIstek, durum_cb=None, trial_cb=None) -> dict:
         )
 
     _bildir(durum_cb, 5, 'Veri hazırlanıyor...')
-    X_train, X_test, y_train, y_test, _, _, _ = veri_hazirla_istekten(
-        istek.preprocessing
-    )
+    pre = istek.preprocessing
+    X_train, X_test, y_train, y_test = ham_split(veri_yukle(), pre.test_oran)
 
-    _bildir(durum_cb, 15, f'{istek.model_adi} optimizasyonu başlıyor...')
+    _bildir(durum_cb, 15, f'{istek.model_adi} optimizasyonu başlıyor ({istek.cv_fold}-fold CV)...')
     baslangic = time.perf_counter()
     sonuc = model_optimize_et(
-        model_adi = istek.model_adi,
-        X_train   = X_train,
-        y_train   = y_train,
-        X_test    = X_test,
-        y_test    = y_test,
-        n_trials  = istek.n_trials,
-        timeout   = istek.timeout,
-        callback  = trial_cb,
+        model_adi          = istek.model_adi,
+        X_train            = X_train,
+        y_train            = y_train,
+        X_test             = X_test,
+        y_test             = y_test,
+        preprocessing_ayar = preprocessing_ayar_dict(pre),
+        n_trials           = istek.n_trials,
+        timeout            = istek.timeout,
+        callback           = trial_cb,
+        cv_fold            = istek.cv_fold,
     )
     sure = round(time.perf_counter() - baslangic, 2)
 
     optimizasyon_kaydet_db(
         model_adi           = istek.model_adi,
         en_iyi_auc          = sonuc['en_iyi_auc'],
+        test_auc            = sonuc['test_auc'],
+        cv_fold             = sonuc['cv_fold'],
         en_iyi_params       = sonuc['en_iyi_params'],
         toplam_trial        = sonuc['toplam_trial'],
         optimizasyon_suresi = sure,
@@ -297,6 +300,9 @@ def optimize_et(istek: OptimizasyonIstek, durum_cb=None, trial_cb=None) -> dict:
         'model_adi'          : istek.model_adi,
         'en_iyi_params'      : sonuc['en_iyi_params'],
         'en_iyi_auc'         : sonuc['en_iyi_auc'],
+        'cv_std'             : sonuc['cv_std'],
+        'test_auc'           : sonuc['test_auc'],
+        'cv_fold'            : sonuc['cv_fold'],
         'toplam_trial'       : sonuc['toplam_trial'],
         'trial_gecmisi'      : sonuc['trial_gecmisi'],
         'optimizasyon_suresi': sure,

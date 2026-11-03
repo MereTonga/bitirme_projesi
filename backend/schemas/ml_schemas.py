@@ -144,20 +144,25 @@ class OptimizasyonIstek(BaseModel):
         default=None, ge=10, le=600,
         description='Maksimum süre (saniye)'
     )
+    cv_fold         : int   = Field(default=5, ge=3, le=10, description='Stratified k-fold sayısı')
     preprocessing   : PreprocessingAyarlari = PreprocessingAyarlari()
     ozel_isim       : Optional[str] = None
 
 
 class TrialSonuc(BaseModel):
     trial_no : int
-    auc      : float
+    auc      : float            # CV ortalama ROC-AUC
+    cv_std   : float = 0.0
     params   : Dict[str, Any]
 
 
 class OptimizasyonYaniti(BaseModel):
     model_adi       : str
     en_iyi_params   : Dict[str, Any]
-    en_iyi_auc      : float
+    en_iyi_auc      : float            # en iyi trial'ın CV ortalama ROC-AUC'si
+    cv_std          : float = 0.0
+    test_auc        : Optional[float] = None   # en iyi parametrelerle test setinde (tek seferlik)
+    cv_fold         : int = 5
     toplam_trial    : int
     trial_gecmisi   : List[TrialSonuc]
     optimizasyon_suresi: float

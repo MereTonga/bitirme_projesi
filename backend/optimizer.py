@@ -213,8 +213,37 @@ def model_olustur(model_adi, params):
 
 
 # ─────────────────────────────────────────
-# 3. OPTİMİZASYON FONKSİYONU
+# 3. OPTİMİZASYON FONKSİYONU — STRATIFIED K-FOLD CV
 # ─────────────────────────────────────────
+
+CLASS_WEIGHT_DESTEKLEYEN = {'logistic_regression', 'decision_tree', 'random_forest', 'svm'}
+
+
+def _tam_pipeline(model_adi, params, preprocessing_ayar):
+    """
+    imputer → scaler → (SMOTE) → model zincirini imblearn Pipeline olarak kurar.
+    Her CV fold'unda sadece o fold'un train kısmına fit edilir; böylece
+    ölçekleme, eksik doldurma ve sentetik örnekler validation'a sızmaz.
+    """
+    from imblearn.pipeline import Pipeline as ImbPipeline
+    from imblearn.over_sampling import SMOTE
+    from pipeline_builder import imputer_sec, scaler_sec
+
+    pre   = preprocessing_ayar or {}
+    denge = pre.get('denge', 'smote')
+    params = dict(params)
+    if denge == 'class_weight' and model_adi in CLASS_WEIGHT_DESTEKLEYEN:
+        params['class_weight'] = 'balanced'   # her fold kendi oranından hesaplar
+
+    adimlar = [
+        ('imputer', imputer_sec(pre.get('imputer', 'median'), pre.get('knn_k', 5))),
+        ('scaler',  scaler_sec(pre.get('scaler', 'robust'))),
+    ]
+    if denge == 'smote':
+        adimlar.append(('smote', SMOTE(random_state=RANDOM_STATE)))
+    adimlar.append(('model', model_olustur(model_adi, params)))
+    return ImbPipeline(steps=adimlar)
+
 
 def model_optimize_et(
     model_adi,
@@ -222,89 +251,94 @@ def model_optimize_et(
     y_train,
     X_test,
     y_test,
-    n_trials        = 20,
-    timeout         = None,
-    callback        = None
+    preprocessing_ayar = None,
+    n_trials           = 20,
+    timeout            = None,
+    callback           = None,
+    cv_fold            = 5
 ):
     """
-    Belirtilen model için Optuna ile hiperparametre optimizasyonu yapar.
+    Optuna (TPE) ile hiperparametre araması. Her trial'ın skoru, eğitim
+    setinde stratified k-fold cross-validation ROC-AUC ortalamasıdır; test
+    seti aramaya HİÇ girmez, yalnızca en iyi parametrelerle yapılan son
+    değerlendirmede kullanılır.
 
     Parametreler:
-        model_adi  : 'knn', 'random_forest' vb.
-        X_train    : Eğitim verisi
-        y_train    : Eğitim etiketleri
-        X_test     : Test verisi
-        y_test     : Test etiketleri
-        n_trials   : Deneme sayısı
-        timeout    : Maksimum süre (saniye), None=sınırsız
-        callback   : Her trial sonrası çağrılacak fonksiyon
-                     callback(trial_no, value, params)
+        X_train, X_test    : HAM özellikler (DataFrame, NaN içerebilir)
+        y_train, y_test    : numpy array
+        preprocessing_ayar : {'imputer','scaler','denge','knn_k'}
+        n_trials, timeout  : Optuna sınırları
+        callback           : callback(trial_no, cv_auc, params)
+        cv_fold            : fold sayısı
 
     Döndürür:
         {
-            'en_iyi_params'  : dict,
-            'en_iyi_auc'     : float,
-            'trial_gecmisi'  : list[dict],
-            'toplam_trial'   : int
+            'en_iyi_params' : dict,
+            'en_iyi_auc'    : float   (CV ortalaması),
+            'cv_std'        : float,
+            'test_auc'      : float   (en iyi parametrelerle, tüm train'e fit),
+            'cv_fold'       : int,
+            'trial_gecmisi' : [{'trial_no','auc','cv_std','params'}],
+            'toplam_trial'  : int
         }
     """
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    import numpy as np
+
+    skf = StratifiedKFold(n_splits=cv_fold, shuffle=True, random_state=RANDOM_STATE)
     trial_gecmisi = []
 
     def objective(trial):
         params = search_space_tanimla(trial, model_adi)
-
-        # AdaBoost için max_depth kopyala (factory içinde pop ediliyor)
-        params_kopya = params.copy()
-
         try:
-            model = model_olustur(model_adi, params_kopya)
-            model.fit(X_train, y_train)
-
-            if hasattr(model, 'predict_proba'):
-                y_prob = model.predict_proba(X_test)[:, 1]
-            else:
-                y_prob = model.decision_function(X_test)
-
-            auc = roc_auc_score(y_test, y_prob)
-
+            boru   = _tam_pipeline(model_adi, params, preprocessing_ayar)
+            skorlar = cross_val_score(
+                boru, X_train, y_train, cv=skf, scoring='roc_auc', n_jobs=1
+            )
+            ort, std = float(np.mean(skorlar)), float(np.std(skorlar))
         except Exception as e:
-            # Geçersiz parametre kombinasyonları için ceza
-            return 0.0
+            # Geçersiz parametre kombinasyonu: trial başarısız sayılır
+            trial.set_user_attr('hata', str(e))
+            raise optuna.TrialPruned(str(e))
 
-        # Geçmişe kaydet
         trial_gecmisi.append({
-            'trial_no' : trial.number + 1,
-            'auc'      : round(auc, 4),
-            'params'   : params
+            'trial_no': trial.number + 1,
+            'auc'     : round(ort, 4),
+            'cv_std'  : round(std, 4),
+            'params'  : params
         })
-
-        # Callback
         if callback:
             try:
-                callback(trial.number + 1, auc, params)
+                callback(trial.number + 1, ort, params)
             except Exception:
                 pass
+        return ort
 
-        return auc
-
-    # Study oluştur ve çalıştır
     study = optuna.create_study(
         direction = 'maximize',
         sampler   = optuna.samplers.TPESampler(seed=RANDOM_STATE)
     )
-    study.optimize(
-        objective,
-        n_trials  = n_trials,
-        timeout   = timeout,
-        show_progress_bar = False
-    )
+    study.optimize(objective, n_trials=n_trials, timeout=timeout, show_progress_bar=False)
 
+    if not trial_gecmisi:
+        raise RuntimeError('Hiçbir trial başarıyla tamamlanamadı.')
+
+    # En iyi parametrelerle tüm train'e fit, test setinde tek seferlik değerlendirme
+    en_iyi = _tam_pipeline(model_adi, study.best_params, preprocessing_ayar)
+    en_iyi.fit(X_train, y_train)
+    if hasattr(en_iyi, 'predict_proba'):
+        y_prob = en_iyi.predict_proba(X_test)[:, 1]
+    else:
+        y_prob = en_iyi.decision_function(X_test)
+    test_auc = float(roc_auc_score(y_test, y_prob))
+
+    en_iyi_kayit = max(trial_gecmisi, key=lambda t: t['auc'])
     return {
         'en_iyi_params': study.best_params,
         'en_iyi_auc'   : round(study.best_value, 4),
-        'trial_gecmisi': sorted(
-            trial_gecmisi,
-            key=lambda x: x['trial_no']
-        ),
+        'cv_std'       : en_iyi_kayit['cv_std'],
+        'test_auc'     : round(test_auc, 4),
+        'cv_fold'      : cv_fold,
+        'trial_gecmisi': sorted(trial_gecmisi, key=lambda x: x['trial_no']),
         'toplam_trial' : len(trial_gecmisi)
     }

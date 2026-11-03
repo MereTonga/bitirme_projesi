@@ -9,15 +9,18 @@ def optimizasyon_kaydet_db(
     en_iyi_auc          : float,
     en_iyi_params       : dict,
     toplam_trial        : int,
-    optimizasyon_suresi : float
+    optimizasyon_suresi : float,
+    test_auc            : float = None,
+    cv_fold             : int   = None
 ) -> int:
     """Bir Optuna çalışmasının özetini kaydeder, satır id'sini döndürür."""
     with db_baglanti() as cursor:
         cursor.execute('''
             INSERT INTO optimizasyon_sonuclari (
                 model_adi, en_iyi_auc, en_iyi_params,
-                toplam_trial, optimizasyon_suresi, kayit_zamani
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                toplam_trial, optimizasyon_suresi, kayit_zamani,
+                test_auc, cv_fold
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             model_adi,
             en_iyi_auc,
@@ -25,6 +28,8 @@ def optimizasyon_kaydet_db(
             toplam_trial,
             optimizasyon_suresi,
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            test_auc,
+            cv_fold,
         ))
         return cursor.lastrowid
 

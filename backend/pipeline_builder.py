@@ -80,7 +80,29 @@ def preprocessing_pipeline_olustur(
 
 
 # ─────────────────────────────────────────
-# 4. TAM VERİ HAZIRLAMA AKIŞI
+# 4. HAM SPLIT
+# ─────────────────────────────────────────
+
+def ham_split(df, test_oran=TEST_ORAN, random_state=RANDOM_STATE):
+    """
+    Ham veriyi stratified train/test olarak böler; hiçbir dönüşüm uygulamaz.
+    Optuna CV'si (fold içinde imputer+scaler+SMOTE) ve ANN validation ayrımı
+    bu ham split'ten başlar.
+
+    Döndürür:
+        X_train, X_test : pandas DataFrame (özellikler, NaN içerebilir)
+        y_train, y_test : numpy array
+    """
+    X = df[OZELLIK_KOLONLARI]
+    y = df[HEDEF_KOLON]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_oran, random_state=random_state, stratify=y
+    )
+    return X_train, X_test, y_train.values, y_test.values
+
+
+# ─────────────────────────────────────────
+# 5. TAM VERİ HAZIRLAMA AKIŞI
 # ─────────────────────────────────────────
 
 def veri_hazirla(
@@ -119,27 +141,16 @@ def veri_hazirla(
     """
 
     # 1. Split — pipeline fit'ten ÖNCE
-    X = df[OZELLIK_KOLONLARI]
-    y = df[HEDEF_KOLON]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size    = test_oran,
-        random_state = random_state,
-        stratify     = y
-    )
+    X_train, X_test, y_train, y_test = ham_split(df, test_oran, random_state)
 
     # 2. Pipeline oluştur ve SADECE train'e fit et
     pipeline = preprocessing_pipeline_olustur(
         imputer_yontem, scaler_yontem, knn_k
     )
     X_train_scaled = pipeline.fit_transform(X_train)
-    
+
     # 3. Test'e sadece transform — fit yok!
     X_test_scaled  = pipeline.transform(X_test)
-
-    y_train = y_train.values
-    y_test  = y_test.values
 
     # 4. Dengesizlik yöntemi
     class_weights = None

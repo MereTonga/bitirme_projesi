@@ -85,9 +85,17 @@ CREATE TABLE IF NOT EXISTS optimizasyon_sonuclari (
     en_iyi_params       TEXT,
     toplam_trial        INTEGER,
     optimizasyon_suresi REAL,
-    kayit_zamani        TEXT
+    kayit_zamani        TEXT,
+    test_auc            REAL,
+    cv_fold             INTEGER
 )
 '''
+
+# Var olan veritabanlarına sonradan eklenen kolonlar: (tablo, kolon, tip)
+EK_KOLONLAR = [
+    ('optimizasyon_sonuclari', 'test_auc', 'REAL'),
+    ('optimizasyon_sonuclari', 'cv_fold',  'INTEGER'),
+]
 
 # İndeksler — sık sorgulanan kolonlar
 INDEKSLER = [
@@ -121,6 +129,13 @@ def veritabani_olustur():
         # İndeksleri oluştur
         for indeks in INDEKSLER:
             cursor.execute(indeks)
+
+        # Eski veritabanlarında eksik kolonları ekle (basit migration)
+        for tablo, kolon, tip in EK_KOLONLAR:
+            cursor.execute(f'PRAGMA table_info({tablo})')
+            mevcut = {satir[1] for satir in cursor.fetchall()}
+            if kolon not in mevcut:
+                cursor.execute(f'ALTER TABLE {tablo} ADD COLUMN {kolon} {tip}')
 
     print(f'Veritabanı hazır: {DB_YOLU}')
 
