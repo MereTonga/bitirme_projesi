@@ -90,3 +90,107 @@ def test_optimizasyon_asenkron(istemci):
     job = istemci.get(f"/jobs/{r.json()['job_id']}").json()
     assert job['durum'] == 'tamamlandi', job
     assert job['sonuc']['toplam_trial'] == 5
+
+
+# ─────────────────────────────────────────
+# TAHMİN & AÇIKLAMA — modelin kendi pipeline'ı
+# ─────────────────────────────────────────
+
+ORNEK_SU = {'ph': None, 'Hardness': 200.0, 'Solids': 20000.0, 'Chloramines': 7.0,
+            'Sulfate': 330.0, 'Conductivity': 420.0, 'Organic_carbon': 14.0,
+            'Trihalomethanes': None, 'Turbidity': 4.0}
+
+
+def _egit(istemci, yol, payload):
+    r = istemci.post(yol, json=payload)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_her_model_kendi_pipelineiyla_tahmin_yapar(istemci):
+    robust = _egit(istemci, '/train/ml/decision_tree',
+                   {'max_depth': 3, 'preprocessing': {'scaler_yontem': 'robust'}})
+    minmax = _egit(istemci, '/train/ml/decision_tree',
+                   {'max_depth': 3, 'preprocessing': {'scaler_yontem': 'minmax', 'imputer_yontem': 'knn'}})
+
+    # Sonradan eğitilen model, öncekinin preprocessing bilgisini ezmedi
+    d_robust = istemci.get(f"/models/{robust['dosya_adi']}").json()
+    d_minmax = istemci.get(f"/models/{minmax['dosya_adi']}").json()
+    assert d_robust['preprocessing_ayar']['scaler'] == 'robust'
+    assert d_minmax['preprocessing_ayar'] == {'imputer': 'knn', 'scaler': 'minmax',
+                                              'denge': 'smote', 'knn_k': 5, 'test_oran': 0.2}
+
+    for m in (robust, minmax):
+        r = istemci.post('/predict', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                           'su_parametreleri': ORNEK_SU, 'esik': 0.5})
+        assert r.status_code == 200, r.text
+        gov = r.json()
+        assert gov['sinif'] in (0, 1) and 0.0 <= gov['olasilik'] <= 1.0
+        assert gov['model_adi'] == 'decision_tree'
+
+    # Tür uyuşmazlığı 400, olmayan model 404
+    r = istemci.post('/predict', json={'dosya_adi': robust['dosya_adi'], 'model_turu': 'dl',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 400
+    r = istemci.post('/predict', json={'dosya_adi': 'yok.pkl', 'model_turu': 'ml',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 404
+    # Tahminler DB'ye yazıldı
+    assert len(istemci.get('/db/tahminler').json()) >= 2
+
+
+def test_toplu_tahmin(istemci):
+    m = _egit(istemci, '/train/ml/naive_bayes', {})
+    r = istemci.post('/predict/batch', json={
+        'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+        'su_listesi': [ORNEK_SU, {**ORNEK_SU, 'ph': 7.2}, {**ORNEK_SU, 'Turbidity': 2.0}],
+        'esik': 0.5
+    })
+    assert r.status_code == 200, r.text
+    gov = r.json()
+    assert gov['toplam'] == 3 and gov['basarili'] == 3 and gov['hatali'] == 0
+    assert gov['icilir_sayi'] + gov['icilmez_sayi'] == 3
+    assert [s['satir_no'] for s in gov['sonuclar']] == [1, 2, 3]
+
+    assert istemci.post('/predict/batch', json={'dosya_adi': m['dosya_adi'],
+                                                'su_listesi': []}).status_code == 400
+
+
+def test_ann_tahmin_kendi_pipelineiyla(istemci):
+    ann = _egit(istemci, '/train/dl/ann',
+                {**HIZLI_ANN, 'preprocessing': {'scaler_yontem': 'standard'}})
+    d = istemci.get(f"/models/{ann['dosya_adi']}").json()
+    assert d['preprocessing_ayar']['scaler'] == 'standard' and d['mimari']['gizli_katmanlar'] == [8]
+    r = istemci.post('/predict', json={'dosya_adi': ann['dosya_adi'], 'model_turu': 'dl',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text
+    assert r.json()['model_adi'] == 'ann'
+
+
+def test_shap_aciklama_tree_model(istemci):
+    m = _egit(istemci, '/train/ml/random_forest', {'n_estimators': 10, 'max_depth': 4})
+    r = istemci.post('/explain', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text
+    gov = r.json()
+    assert len(gov['shap_degerleri']) == 9 and len(gov['waterfall']['ozellikler']) == 9
+
+    r = istemci.post('/explain/summary', json={'dosya_adi': m['dosya_adi'], 'n_ornek': 20})
+    assert r.status_code == 200, r.text
+    assert len(r.json()['onem_sirasi']) == 9
+
+
+@pytest.mark.xfail(strict=True, reason='Faz 3: GradientExplainer 1-D çıktı IndexError')
+def test_shap_aciklama_ann(istemci):
+    ann = _egit(istemci, '/train/dl/ann', HIZLI_ANN)
+    r = istemci.post('/explain', json={'dosya_adi': ann['dosya_adi'], 'model_turu': 'dl',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.xfail(strict=True, reason='Faz 3: AdaBoost TreeExplainer tarafından desteklenmiyor')
+def test_shap_aciklama_adaboost(istemci):
+    m = _egit(istemci, '/train/ml/adaboost', {'n_estimators': 10})
+    r = istemci.post('/explain', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text

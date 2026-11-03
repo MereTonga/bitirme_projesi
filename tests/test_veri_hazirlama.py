@@ -50,18 +50,3 @@ def test_class_weight_modu(ham_veri):
     assert cw[1] > cw[0]          # azınlık sınıfa daha yüksek ağırlık
     assert pw > 1.0
     assert (y_train == 1).sum() < (y_train == 0).sum()   # SMOTE uygulanmadı
-
-
-def test_pipeline_kaydet_yukle_gecici_garage(hazir_veri):
-    import os
-    import config
-    from pipeline_builder import pipeline_kaydet, pipeline_yukle
-    pipe = hazir_veri[4]
-    yol = pipeline_kaydet(pipe, 'test_pipeline.pkl')
-    assert yol.startswith(config.GARAGE_YOLU)
-    assert os.path.exists(yol)
-
-    yuklu = pipeline_yukle('test_pipeline.pkl')
-    ornek = pd.DataFrame([{k: np.nan if k in EKSIK_KOLONLAR else 1.0
-                           for k in OZELLIK_KOLONLARI}])
-    assert np.allclose(pipe.transform(ornek), yuklu.transform(ornek))

@@ -10,15 +10,13 @@ burada yaşar. İlerleme bildirimi için isteğe bağlı callback'ler alınır:
     trial_cb(trial_no, auc, params)            sadece optimizasyon
 """
 import importlib
-import os
 import time
 
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-from config             import GARAGE_YOLU
 from data_loader        import veri_yukle
-from pipeline_builder   import veri_hazirla, pipeline_kaydet
+from pipeline_builder   import veri_hazirla
 from ml.evaluator       import model_degerlendir
 from garage_manager     import model_kaydet
 from schemas.ml_schemas import (
@@ -122,9 +120,6 @@ def ml_egit(model_adi: str, istek, durum_cb=None) -> dict:
     X_train, X_test, y_train, y_test, pipe, cw, _ = veri_hazirla_istekten(
         istek.preprocessing
     )
-    # /predict için global pipeline (Faz 1.2'de model paketine taşınacak)
-    pipeline_kaydet(pipe)
-
     # class_weight seçildiyse ve model destekliyorsa hesaplanan ağırlıkları ver
     if istek.preprocessing.dengesizlik == 'class_weight' and cw \
             and 'class_weight' in hiper:
@@ -147,6 +142,7 @@ def ml_egit(model_adi: str, istek, durum_cb=None) -> dict:
         model_turu         = 'ml',
         ozel_isim          = istek.ozel_isim,
         preprocessing_ayar = preprocessing_ayar_dict(istek.preprocessing),
+        pipeline           = pipe,
     )
 
     return {
@@ -177,7 +173,6 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
     from dl.trainer        import model_egit
     from dl.dl_garage      import ann_kaydet, ann_tahmin
     from dl.egitim_grafigi import egitim_ozeti
-    from database.models_repo import model_kaydet_db, egitim_gecmisi_kaydet_db
 
     hiper = istek.model_dump(exclude={'preprocessing', 'ozel_isim'})
 
@@ -222,36 +217,15 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
 
     _bildir(durum_cb, 95, 'Model kaydediliyor...')
     kayit = ann_kaydet(
-        model             = model,
-        gecmis            = gecmis,
-        metrikler         = metrikler,
-        hiperparametreler = hiper,
-        egitim_suresi     = sure,
-        ozel_isim         = istek.ozel_isim,
+        model              = model,
+        gecmis             = gecmis,
+        metrikler          = metrikler,
+        hiperparametreler  = hiper,
+        egitim_suresi      = sure,
+        ozel_isim          = istek.ozel_isim,
+        pipeline           = pipe,
+        preprocessing_ayar = preprocessing_ayar_dict(istek.preprocessing),
     )
-
-    # Veritabanı kaydı — senkron ve asenkron yol için tek yer
-    pre      = istek.preprocessing
-    boyut_kb = os.path.getsize(os.path.join(GARAGE_YOLU, kayit['dosya_adi'])) / 1024
-    db_id = model_kaydet_db(
-        dosya_adi         = kayit['dosya_adi'],
-        goruntu_adi       = kayit['goruntu_adi'],
-        model_adi         = 'ann',
-        model_turu        = 'dl',
-        egitim_suresi     = sure,
-        accuracy          = metrikler['accuracy'],
-        f1                = metrikler['f1'],
-        roc_auc           = metrikler['roc_auc'],
-        hiperparametreler = hiper,
-        imputer_yontem    = pre.imputer_yontem,
-        scaler_yontem     = pre.scaler_yontem,
-        dengesizlik       = pre.dengesizlik,
-        boyut_kb          = round(boyut_kb, 1),
-        toplam_epoch      = len(gecmis['train_loss']),
-        en_iyi_epoch      = gecmis.get('en_iyi_epoch', 0),
-        erken_durduruldu  = gecmis.get('durduruldu', False),
-    )
-    egitim_gecmisi_kaydet_db(db_id, gecmis)
 
     ozet = egitim_ozeti(gecmis)
     return {

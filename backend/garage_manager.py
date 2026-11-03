@@ -1,17 +1,31 @@
+"""
+Model garajı: eğitilmiş modellerin diske (.pkl) ve veritabanına kaydı,
+listelenmesi, yüklenmesi ve silinmesi.
+
+Her model paketi (.pkl) kendi preprocessing pipeline'ını taşır; tahmin
+anında girdi, modelin eğitildiği imputer+scaler ile dönüştürülür.
+Paket anahtarları:
+    model / state_dict+mimari, model_adi, model_turu ('ml'|'dl'),
+    pipeline, preprocessing_ayar, hiperparametreler, egitim_suresi,
+    metrikler, goruntu_adi, kayit_zamani
+"""
 import os
 import joblib
+import numpy as np
 import pandas as pd
 from datetime import datetime
+
 from config import GARAGE_YOLU, SISTEM_DOSYALARI
 
 
 # ─────────────────────────────────────────
-# 1. BENZERSIZ İSİM ÜRETME
+# 1. BENZERSİZ İSİM ÜRETME
 # ─────────────────────────────────────────
 
 def benzersiz_isim_uret(model_adi, hiperparametreler):
     """
-    Model adı ve hiperparametrelerden benzersiz dosya adı üretir.
+    Model adı, ilk üç hiperparametre ve zaman damgasından dosya adı üretir.
+    Örn: random_forest_n100_d8_mss2_20260531_125022
     """
     zaman_damgasi = datetime.now().strftime('%Y%m%d_%H%M%S')
     kisaltmalar = {
@@ -36,15 +50,29 @@ def benzersiz_isim_uret(model_adi, hiperparametreler):
     for anahtar, deger in hiperparametreler.items():
         if deger is None:
             continue
-        kisaltma  = kisaltmalar.get(anahtar, anahtar[:3])
-        deger_str = str(deger).replace('.', 'p').replace(' ', '')
-        if kisaltma:
-            etiketler.append(f"{kisaltma}{deger_str}")
+        kisaltma = kisaltmalar.get(anahtar, anahtar[:3])
+        if isinstance(deger, dict):
+            deger_str = 'custom'
+        elif isinstance(deger, float):
+            deger_str = f'{deger:.4g}'.replace('.', 'p').replace('-', 'm')
         else:
-            etiketler.append(deger_str)
+            deger_str = str(deger).replace('.', 'p').replace(' ', '')
+        etiketler.append(f"{kisaltma}{deger_str}" if kisaltma else deger_str)
 
-    etiket    = '_'.join(etiketler[:3])
-    return f"{model_adi}_{etiket}_{zaman_damgasi}"
+    etiket = '_'.join(etiketler[:3])
+    return cakismasiz_ad(f"{model_adi}_{etiket}_{zaman_damgasi}")
+
+
+def cakismasiz_ad(temel_ad):
+    """
+    Garage'da aynı adda .pkl varsa sonuna _2, _3 ... ekler.
+    Aynı saniyede biten iki eğitimin birbirinin üzerine yazmasını önler.
+    """
+    ad, sayac = temel_ad, 2
+    while os.path.exists(os.path.join(GARAGE_YOLU, ad + '.pkl')):
+        ad = f"{temel_ad}_{sayac}"
+        sayac += 1
+    return ad
 
 
 # ─────────────────────────────────────────
@@ -57,60 +85,59 @@ def model_kaydet(
     hiperparametreler,
     egitim_suresi,
     metrikler,
-    model_turu  = 'ml',
-    ozel_isim   = None,
-    preprocessing_ayar = None
+    model_turu         = 'ml',
+    ozel_isim          = None,
+    preprocessing_ayar = None,
+    pipeline           = None
 ):
     """
-    ML modelini .pkl olarak kaydeder ve
-    metadata'yı veritabanına yazar.
+    ML modelini preprocessing pipeline'ıyla birlikte .pkl olarak kaydeder
+    ve metadata'yı veritabanına yazar.
 
     Parametreler:
-        preprocessing_ayar: {'imputer': str, 'scaler': str, 'denge': str}
+        pipeline           : Modelin eğitildiği fit edilmiş sklearn Pipeline
+                             (imputer + scaler). Tahminde bu kullanılır.
+        preprocessing_ayar : {'imputer', 'scaler', 'denge', 'knn_k', 'test_oran'}
     """
     os.makedirs(GARAGE_YOLU, exist_ok=True)
 
     dosya_adi   = benzersiz_isim_uret(model_adi, hiperparametreler)
     tam_yol     = os.path.join(GARAGE_YOLU, dosya_adi + '.pkl')
     goruntu_adi = ozel_isim or dosya_adi
-    boyut_kb    = 0.0
+    pre         = preprocessing_ayar or {}
 
-    metadata = {
-        'model'            : model_objesi,
-        'model_adi'        : model_adi,
-        'model_turu'       : model_turu,
-        'hiperparametreler': hiperparametreler,
-        'egitim_suresi'    : egitim_suresi,
-        'metrikler'        : metrikler,
-        'goruntu_adi'      : goruntu_adi,
-        'kayit_zamani'     : datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    paket = {
+        'model'             : model_objesi,
+        'model_adi'         : model_adi,
+        'model_turu'        : model_turu,
+        'pipeline'          : pipeline,
+        'preprocessing_ayar': pre,
+        'hiperparametreler' : hiperparametreler,
+        'egitim_suresi'     : egitim_suresi,
+        'metrikler'         : metrikler,
+        'goruntu_adi'       : goruntu_adi,
+        'kayit_zamani'      : datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
-
-    joblib.dump(metadata, tam_yol)
+    joblib.dump(paket, tam_yol)
     boyut_kb = os.path.getsize(tam_yol) / 1024
-    
-    # ── Veritabanına kaydet ───────────────────────────────────
-    try:
-        from database.models_repo import model_kaydet_db
-        pre = preprocessing_ayar or {}
-        model_kaydet_db(
-            dosya_adi         = dosya_adi + '.pkl',
-            goruntu_adi       = goruntu_adi,
-            model_adi         = model_adi,
-            model_turu        = model_turu,
-            egitim_suresi     = egitim_suresi,
-            accuracy          = metrikler.get('accuracy', 0),
-            f1                = metrikler.get('f1', 0),
-            roc_auc           = metrikler.get('roc_auc', 0),
-            hiperparametreler = hiperparametreler,
-            imputer_yontem    = pre.get('imputer', 'median'),
-            scaler_yontem     = pre.get('scaler',  'robust'),
-            dengesizlik       = pre.get('denge',   'smote'),
-            boyut_kb          = round(boyut_kb, 1)
-        )
-    except Exception as e:
-        print(f'DB kayıt uyarısı: {e}')
-    
+
+    from database.models_repo import model_kaydet_db
+    model_kaydet_db(
+        dosya_adi         = dosya_adi + '.pkl',
+        goruntu_adi       = goruntu_adi,
+        model_adi         = model_adi,
+        model_turu        = model_turu,
+        egitim_suresi     = egitim_suresi,
+        accuracy          = metrikler.get('accuracy', 0),
+        f1                = metrikler.get('f1', 0),
+        roc_auc           = metrikler.get('roc_auc', 0),
+        hiperparametreler = hiperparametreler,
+        imputer_yontem    = pre.get('imputer', 'median'),
+        scaler_yontem     = pre.get('scaler',  'robust'),
+        dengesizlik       = pre.get('denge',   'smote'),
+        boyut_kb          = round(boyut_kb, 1)
+    )
+
     return {
         'dosya_adi'  : dosya_adi + '.pkl',
         'tam_yol'    : tam_yol,
@@ -124,10 +151,8 @@ def model_kaydet(
 
 def garage_listele(model_turu=None):
     """
-    Önce veritabanından listeler.
-    DB başarısız olursa dosya sistemine döner.
+    Önce veritabanından listeler; DB başarısız olursa dosya sistemine döner.
     """
-    
     try:
         from database.models_repo import tum_modelleri_getir
         db_liste = tum_modelleri_getir(model_turu=model_turu)
@@ -135,35 +160,24 @@ def garage_listele(model_turu=None):
             return db_liste
     except Exception:
         pass
-    
-    # Fallback: dosya sistemi
     return _dosya_sisteminden_listele(model_turu)
 
+
 def _dosya_sisteminden_listele(model_turu=None):
-    """Veritabanı yoksa dosyaları okur (fallback)."""
+    """Veritabanı yoksa .pkl dosyalarını okur (fallback)."""
     if not os.path.exists(GARAGE_YOLU):
         return []
 
     liste = []
     for dosya in os.listdir(GARAGE_YOLU):
-        # Sistem dosyalarını ve json'ları atla
-        if dosya in SISTEM_DOSYALARI:
-            continue
-        if not dosya.endswith('.pkl'):
+        if dosya in SISTEM_DOSYALARI or not dosya.endswith('.pkl'):
             continue
         tam_yol = os.path.join(GARAGE_YOLU, dosya)
         try:
-            meta  = joblib.load(tam_yol)
-            tur   = meta.get('model_turu', '')
-
-            if not tur:
+            meta = joblib.load(tam_yol)
+            tur  = meta.get('model_turu', '')
+            if not tur or (model_turu and tur != model_turu):
                 continue
-
-            # Tür filtresi
-            if model_turu and tur != model_turu:
-                continue
-
-            boyut = os.path.getsize(tam_yol) / 1024
             liste.append({
                 'dosya_adi'    : dosya,
                 'goruntu_adi'  : meta.get('goruntu_adi', dosya),
@@ -174,51 +188,77 @@ def _dosya_sisteminden_listele(model_turu=None):
                 'accuracy'     : meta.get('metrikler', {}).get('accuracy', 0),
                 'f1'           : meta.get('metrikler', {}).get('f1', 0),
                 'roc_auc'      : meta.get('metrikler', {}).get('roc_auc', 0),
-                'boyut_kb'     : round(boyut, 1)
+                'boyut_kb'     : round(os.path.getsize(tam_yol) / 1024, 1)
             })
-
         except Exception:
             continue
 
-    return sorted(
-        liste,
-        key=lambda x: x['kayit_zamani'],
-        reverse=True
-    )
+    return sorted(liste, key=lambda x: x['kayit_zamani'], reverse=True)
 
 
 # ─────────────────────────────────────────
 # 4. MODEL YÜKLE
 # ─────────────────────────────────────────
 
+def _guvenli_dosya_adi(dosya_adi):
+    """Garage dışına çıkan yolları ve .pkl olmayan adları reddeder."""
+    if (not dosya_adi or os.path.basename(dosya_adi) != dosya_adi
+            or not dosya_adi.endswith('.pkl') or dosya_adi in SISTEM_DOSYALARI):
+        raise FileNotFoundError(f"Geçersiz model dosya adı: {dosya_adi}")
+    return dosya_adi
+
+
 def model_yukle(dosya_adi):
     """
-    Garage'dan ML model dosyasını yükler.
-
-    Döndürür:
-        metadata dict
+    Garage'dan model paketini (dict) yükler. ML ve DL paketleri için ortak.
     """
-    tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
+    dosya_adi = _guvenli_dosya_adi(dosya_adi)
+    tam_yol   = os.path.join(GARAGE_YOLU, dosya_adi)
     if not os.path.exists(tam_yol):
         raise FileNotFoundError(f"Model bulunamadı: {tam_yol}")
     return joblib.load(tam_yol)
 
 
-def ann_yukle_ve_tahmin(dosya_adi, X):
-    """
-    ANN modelini garage'dan yükler ve tahmin yapar.
-    Streamlit /predict için wrapper.
+def pipeline_al(paket):
+    """Paketin kendi preprocessing pipeline'ını döndürür; yoksa hata verir."""
+    pipe = paket.get('pipeline')
+    if pipe is None:
+        raise ValueError(
+            f"'{paket.get('goruntu_adi', '?')}' eski formatta kaydedilmiş "
+            f"(pipeline içermiyor). Modeli yeniden eğitin."
+        )
+    return pipe
 
-    Parametreler:
-        dosya_adi : Garage'daki .pkl dosya adı
-        X         : numpy array (n_ornek, 9)
+
+def tahminci_yukle(dosya_adi):
+    """
+    Bir model paketini yükler ve ham su parametrelerinden (DataFrame)
+    pozitif sınıf olasılığı üreten fonksiyon döndürür. Pipeline (imputer +
+    scaler) fonksiyonun içinde uygulanır; ML ve DL için aynı arayüz.
 
     Döndürür:
-        {'sinif': list, 'olasilik': list}
+        paket            : dict
+        olasilik_hesapla : callable(DataFrame) -> np.ndarray (n,)
     """
-    from dl.dl_garage import ann_yukle, ann_tahmin
-    model, _ = ann_yukle(dosya_adi)
-    return ann_tahmin(model, X)
+    paket = model_yukle(dosya_adi)
+    pipe  = pipeline_al(paket)
+
+    if paket.get('model_turu') == 'dl':
+        from dl.dl_garage import ann_paketten_olustur, ann_tahmin
+        model = ann_paketten_olustur(paket)
+
+        def olasilik_hesapla(X_raw):
+            return np.asarray(ann_tahmin(model, pipe.transform(X_raw))['olasilik'])
+    else:
+        model = paket['model']
+
+        def olasilik_hesapla(X_raw):
+            X = pipe.transform(X_raw)
+            if hasattr(model, 'predict_proba'):
+                return model.predict_proba(X)[:, 1]
+            return model.predict(X).astype(float)
+
+    return paket, olasilik_hesapla
 
 
 # ─────────────────────────────────────────
@@ -227,38 +267,26 @@ def ann_yukle_ve_tahmin(dosya_adi, X):
 
 def model_sil(dosya_adi):
     """
-    Garage'dan model ve varsa eğitim geçmişini siler.
-
-    Döndürür:
-        True: Başarıyla silindi
+    Garage'dan model dosyasını, varsa eğitim geçmişini ve DB kaydını siler.
     """
     if dosya_adi in SISTEM_DOSYALARI:
-        raise PermissionError(
-            f"Sistem dosyası silinemez: {dosya_adi}"
-        )
+        raise PermissionError(f"Sistem dosyası silinemez: {dosya_adi}")
+    dosya_adi = _guvenli_dosya_adi(dosya_adi)
 
     tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
     if not os.path.exists(tam_yol):
-        raise FileNotFoundError(
-            f"Dosya bulunamadı: {tam_yol}"
-        )
+        raise FileNotFoundError(f"Dosya bulunamadı: {tam_yol}")
 
     os.remove(tam_yol)
 
-    # DL ise eğitim geçmişini de sil
-    gecmis_adi = dosya_adi.replace('.pkl', '_gecmis.json')
-    gecmis_yol = os.path.join(GARAGE_YOLU, gecmis_adi)
+    gecmis_yol = os.path.join(GARAGE_YOLU, dosya_adi.replace('.pkl', '_gecmis.json'))
     if os.path.exists(gecmis_yol):
         os.remove(gecmis_yol)
-        
-    # Veritabanından sil
-    try:
-        from database.models_repo import model_sil_db
-        model_sil_db(dosya_adi)
-    except Exception as e:
-        print(f'DB silme uyarısı: {e}')
 
+    from database.models_repo import model_sil_db
+    model_sil_db(dosya_adi)
     return True
+
 
 # ─────────────────────────────────────────
 # 6. KARŞILAŞTIRMA TABLOSU
@@ -266,20 +294,13 @@ def model_sil(dosya_adi):
 
 def karsilastirma_tablosu(model_turu=None):
     """
-    Garage'daki modellerin metriklerini
-    karşılaştırma tablosu olarak döndürür.
-    ML ve DL birlikte gösterilebilir.
-
-    Döndürür:
-        DataFrame: ROC-AUC'ye göre sıralı
+    Garage'daki modellerin metriklerini ROC-AUC'ye göre sıralı tablo olarak döndürür.
     """
     liste = garage_listele(model_turu=model_turu)
     if not liste:
         return pd.DataFrame()
 
     df = pd.DataFrame(liste)
-    
-    # Sütun adlarını normalize et
     kolon_map = {
         'goruntu_adi'  : 'İsim',
         'model_adi'    : 'Model',
@@ -291,11 +312,6 @@ def karsilastirma_tablosu(model_turu=None):
         'kayit_zamani' : 'Kayıt Zamanı',
         'dosya_adi'    : 'Dosya'
     }
-    
-    mevcut_kolonlar = {k: v for k, v in kolon_map.items() if k in df.columns}
-    df = df.rename(columns=mevcut_kolonlar)
-
+    df = df.rename(columns={k: v for k, v in kolon_map.items() if k in df.columns})
     kolonlar = [v for v in kolon_map.values() if v in df.columns]
-    return df[kolonlar].sort_values(
-        'ROC-AUC', ascending=False
-    ).reset_index(drop=True)
+    return df[kolonlar].sort_values('ROC-AUC', ascending=False).reset_index(drop=True)

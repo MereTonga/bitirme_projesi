@@ -1,16 +1,10 @@
-import os
-import joblib
-
 from sklearn.pipeline        import Pipeline
 from sklearn.impute          import SimpleImputer, KNNImputer
 from sklearn.preprocessing   import RobustScaler, StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
 
 from balancer import smote_uygula, class_weight_hesapla
-from config   import (
-    GARAGE_YOLU, OZELLIK_KOLONLARI, HEDEF_KOLON,
-    RANDOM_STATE, TEST_ORAN
-)
+from config   import OZELLIK_KOLONLARI, HEDEF_KOLON, RANDOM_STATE, TEST_ORAN
 
 
 # ─────────────────────────────────────────
@@ -164,40 +158,3 @@ def veri_hazirla(
         pipeline,
         class_weights, pos_weight
     )
-
-
-# ─────────────────────────────────────────
-# 5. PİPELİNE KAYDET / YÜKLE
-# ─────────────────────────────────────────
-
-def pipeline_kaydet(pipeline, dosya_adi='preprocessing_pipeline.pkl'):
-    """
-    Fit edilmiş pipeline'ı garage klasörüne kaydeder.
-
-    Parametreler:
-        pipeline  : Fit edilmiş sklearn Pipeline
-        dosya_adi : Kayıt dosya adı
-    """
-    os.makedirs(GARAGE_YOLU, exist_ok=True)
-    tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
-    joblib.dump(pipeline, tam_yol)
-    print(f"Pipeline kaydedildi: {tam_yol}")
-    return tam_yol
-
-
-def pipeline_yukle(dosya_adi='preprocessing_pipeline.pkl'):
-    """
-    Kaydedilmiş pipeline'ı yükler.
-
-    Parametreler:
-        dosya_adi : Yüklenecek dosya adı
-
-    Döndürür:
-        pipeline: Yüklenmiş sklearn Pipeline
-    """
-    tam_yol = os.path.join(GARAGE_YOLU, dosya_adi)
-    if not os.path.exists(tam_yol):
-        raise FileNotFoundError(
-            f"Pipeline bulunamadı: {tam_yol}"
-        )
-    return joblib.load(tam_yol)

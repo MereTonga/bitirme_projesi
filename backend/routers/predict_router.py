@@ -1,21 +1,45 @@
+"""
+Model garajı, tahmin ve veritabanı sorgu endpoint'leri.
+
+Tahmin akışı: paket yüklenir (garage_manager.tahminci_yukle), ham su
+parametreleri paketin KENDİ pipeline'ından geçirilir, pozitif sınıf
+olasılığı kullanıcı eşiğiyle sınıfa çevrilir, sonuç veritabanına yazılır.
+"""
 import numpy as np
 import pandas as pd
 from fastapi  import APIRouter, HTTPException
 from typing   import List, Optional
 
 from schemas.predict_schemas import (
-    TahminIstek, TahminYaniti, GarajModelBilgisi
+    TahminIstek, TahminYaniti, GarajModelBilgisi, TopluTahminSatir
 )
-from garage_manager  import (
-    garage_listele, model_yukle,
-    model_sil, karsilastirma_tablosu,
-    ann_yukle_ve_tahmin
+from garage_manager import (
+    garage_listele, model_yukle, model_sil,
+    karsilastirma_tablosu, tahminci_yukle
 )
-from pipeline_builder import pipeline_yukle
-from config           import OZELLIK_KOLONLARI
+from config            import OZELLIK_KOLONLARI
 from dl.egitim_grafigi import gecmis_yukle
 
 router = APIRouter()
+
+
+def _su_dataframe(su_parametreleri):
+    """Pydantic SuParametreleri veya dict → tek satırlık DataFrame (kolon sırası sabit)."""
+    if not isinstance(su_parametreleri, dict):
+        su_parametreleri = su_parametreleri.model_dump()
+    return pd.DataFrame([{k: su_parametreleri.get(k) for k in OZELLIK_KOLONLARI}])
+
+
+def _tahminci_getir(dosya_adi):
+    """tahminci_yukle'yi HTTP hatalarına çevirir."""
+    try:
+        return tahminci_yukle(dosya_adi)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Model yükleme hatası: {e}')
 
 
 # ─────────────────────────────────────────
@@ -25,24 +49,12 @@ router = APIRouter()
 @router.get('/models', response_model=List[GarajModelBilgisi])
 def modelleri_listele(model_turu: Optional[str] = None):
     """
-    Garage'daki modelleri listeler.
-
-    Query parametresi:
-        model_turu: 'ml', 'dl' veya boş (hepsi)
-
-    Örnek:
-        GET /models
-        GET /models?model_turu=ml
-        GET /models?model_turu=dl
+    Garage'daki modelleri listeler. model_turu: 'ml', 'dl' veya boş (hepsi).
     """
     try:
-        liste = garage_listele(model_turu=model_turu)
-        return [GarajModelBilgisi(**item) for item in liste]
+        return [GarajModelBilgisi(**item) for item in garage_listele(model_turu=model_turu)]
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Model listeleme hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Model listeleme hatası: {e}')
 
 
 # ─────────────────────────────────────────
@@ -51,24 +63,12 @@ def modelleri_listele(model_turu: Optional[str] = None):
 
 @router.get('/models/karsilastir')
 def modelleri_karsilastir(model_turu: Optional[str] = None):
-    """
-    Garage'daki modellerin metriklerini
-    karşılaştırma tablosu olarak döndürür.
-    ROC-AUC'ye göre sıralı.
-
-    Döndürür:
-        JSON array — her eleman bir model satırı
-    """
+    """Garage'daki modellerin metriklerini ROC-AUC'ye göre sıralı döndürür."""
     try:
         tablo = karsilastirma_tablosu(model_turu=model_turu)
-        if tablo.empty:
-            return []
-        return tablo.to_dict(orient='records')
+        return [] if tablo.empty else tablo.to_dict(orient='records')
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Karşılaştırma hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Karşılaştırma hatası: {e}')
 
 
 # ─────────────────────────────────────────
@@ -77,35 +77,24 @@ def modelleri_karsilastir(model_turu: Optional[str] = None):
 
 @router.get('/models/{dosya_adi}')
 def model_detay(dosya_adi: str):
-    """
-    Tek bir modelin detaylı bilgisini döndürür.
-    Hiperparametreler, metrikler ve mimari dahil.
-
-    Parametreler:
-        dosya_adi: Garage'daki .pkl dosya adı
-    """
+    """Tek bir modelin metadata'sı: hiperparametreler, metrikler, preprocessing, mimari."""
     try:
         meta = model_yukle(dosya_adi)
     except FileNotFoundError:
-        raise HTTPException(
-            status_code = 404,
-            detail      = f'Model bulunamadı: {dosya_adi}'
-        )
+        raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Model yükleme hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Model yükleme hatası: {e}')
 
     return {
-        'model_adi'        : meta.get('model_adi'),
-        'model_turu'       : meta.get('model_turu'),
-        'goruntu_adi'      : meta.get('goruntu_adi'),
-        'kayit_zamani'     : meta.get('kayit_zamani'),
-        'egitim_suresi'    : meta.get('egitim_suresi'),
-        'metrikler'        : meta.get('metrikler'),
-        'hiperparametreler': meta.get('hiperparametreler'),
-        'mimari'           : meta.get('mimari')
+        'model_adi'         : meta.get('model_adi'),
+        'model_turu'        : meta.get('model_turu'),
+        'goruntu_adi'       : meta.get('goruntu_adi'),
+        'kayit_zamani'      : meta.get('kayit_zamani'),
+        'egitim_suresi'     : meta.get('egitim_suresi'),
+        'metrikler'         : meta.get('metrikler'),
+        'hiperparametreler' : meta.get('hiperparametreler'),
+        'preprocessing_ayar': meta.get('preprocessing_ayar'),
+        'mimari'            : meta.get('mimari')
     }
 
 
@@ -115,30 +104,13 @@ def model_detay(dosya_adi: str):
 
 @router.get('/models/{dosya_adi}/gecmis')
 def egitim_gecmisi(dosya_adi: str):
-    """
-    DL modeline ait eğitim geçmişini döndürür.
-    Streamlit Sekme 4'te grafik çizmek için kullanılır.
-
-    Parametreler:
-        dosya_adi: .pkl uzantılı dosya adı
-
-    Döndürür:
-        train_loss, val_loss, train_acc, val_acc listeleri
-    """
-    gecmis_adi = dosya_adi.replace('.pkl', '')
+    """DL modeline ait epoch bazlı eğitim geçmişini döndürür."""
     try:
-        gecmis = gecmis_yukle(gecmis_adi)
-        return gecmis
+        return gecmis_yukle(dosya_adi.replace('.pkl', ''))
     except FileNotFoundError:
-        raise HTTPException(
-            status_code = 404,
-            detail      = f'Eğitim geçmişi bulunamadı: {dosya_adi}'
-        )
+        raise HTTPException(status_code=404, detail=f'Eğitim geçmişi bulunamadı: {dosya_adi}')
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Geçmiş yükleme hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Geçmiş yükleme hatası: {e}')
 
 
 # ─────────────────────────────────────────
@@ -147,37 +119,16 @@ def egitim_gecmisi(dosya_adi: str):
 
 @router.delete('/models/{dosya_adi}')
 def model_sil_endpoint(dosya_adi: str):
-    """
-    Garage'dan bir modeli siler.
-    DL modeli ise eğitim geçmişi de silinir.
-
-    Parametreler:
-        dosya_adi: Silinecek .pkl dosya adı
-
-    Döndürür:
-        {'mesaj': 'Silindi', 'dosya_adi': str}
-    """
+    """Garage'dan modeli, eğitim geçmişini ve DB kaydını siler."""
     try:
         model_sil(dosya_adi)
-        return {
-            'mesaj'    : 'Model başarıyla silindi.',
-            'dosya_adi': dosya_adi
-        }
+        return {'mesaj': 'Model başarıyla silindi.', 'dosya_adi': dosya_adi}
     except FileNotFoundError:
-        raise HTTPException(
-            status_code = 404,
-            detail      = f'Model bulunamadı: {dosya_adi}'
-        )
+        raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
     except PermissionError as e:
-        raise HTTPException(
-            status_code = 403,
-            detail      = str(e)
-        )
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Silme hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Silme hatası: {e}')
 
 
 # ─────────────────────────────────────────
@@ -187,106 +138,34 @@ def model_sil_endpoint(dosya_adi: str):
 @router.post('/predict', response_model=TahminYaniti)
 def tahmin_yap(istek: TahminIstek):
     """
-    Seçilen modelle su kalitesi tahmini yapar.
-
-    - ML modeli: sklearn predict
-    - DL modeli: PyTorch inference
-    - Pipeline otomatik uygulanır (imputer + scaler)
-
-    Döndürür:
-        sinif, sinif_adi, olasilik, model_adi
+    Seçilen modelle su kalitesi tahmini yapar. Girdi, modelin eğitildiği
+    pipeline'dan (imputer + scaler) geçirilir; eksik ph/Sulfate/THM kabul edilir.
     """
+    paket, olasilik_hesapla = _tahminci_getir(istek.dosya_adi)
+    if istek.model_turu != paket.get('model_turu'):
+        raise HTTPException(
+            status_code = 400,
+            detail      = f"{istek.dosya_adi} bir '{paket.get('model_turu')}' modeli, "
+                          f"istekte '{istek.model_turu}' belirtildi."
+        )
 
-    # ── 1. Su parametrelerini numpy array'e çevir ─────────────
-    su = istek.su_parametreleri
-    X_raw = pd.DataFrame([{
-        'ph'             : su.ph,
-        'Hardness'       : su.Hardness,
-        'Solids'         : su.Solids,
-        'Chloramines'    : su.Chloramines,
-        'Sulfate'        : su.Sulfate,
-        'Conductivity'   : su.Conductivity,
-        'Organic_carbon' : su.Organic_carbon,
-        'Trihalomethanes': su.Trihalomethanes,
-        'Turbidity'      : su.Turbidity
-    }])
-
-    # ── 2. Pipeline uygula ────────────────────────────────────
     try:
-        pipe  = pipeline_yukle()
-        X_pro = pipe.transform(X_raw)
+        y_prob = float(olasilik_hesapla(_su_dataframe(istek.su_parametreleri))[0])
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Pipeline hatası: {str(e)}'
-        )
+        raise HTTPException(status_code=500, detail=f'Tahmin hatası: {e}')
 
-    # ── 3. Model yükle ve tahmin yap ─────────────────────────
-    try:
-        if istek.model_turu == 'ml':
-            meta   = model_yukle(istek.dosya_adi)
-            model  = meta['model']
-            y_pred = model.predict(X_pro)[0]
-            y_prob = model.predict_proba(X_pro)[0][1] \
-                     if hasattr(model, 'predict_proba') \
-                     else float(y_pred)
-
-            goruntu_adi = meta.get('goruntu_adi', meta['model_adi'])
-            model_adi   = meta['model_adi']
-
-        elif istek.model_turu == 'dl':
-            sonuc       = ann_yukle_ve_tahmin(istek.dosya_adi, X_pro)
-            y_pred      = sonuc['sinif'][0]
-            y_prob      = sonuc['olasilik'][0]
-
-            meta        = model_yukle(istek.dosya_adi)
-            goruntu_adi = meta.get('goruntu_adi', 'ann')
-            model_adi   = 'ann'
-
-        else:
-            raise HTTPException(
-                status_code = 400,
-                detail      = 'model_turu ml veya dl olmalı.'
-            )
-
-    except HTTPException:
-        raise
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code = 404,
-            detail      = f'Model bulunamadı: {istek.dosya_adi}'
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Tahmin hatası: {str(e)}'
-        )
-
-    # ── 4. Eşik uygula ────────────────────────────────────────
     sinif     = 1 if y_prob >= istek.esik else 0
     sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
 
-    # ── Tahmin geçmişini kaydet ──────────────────────────────
     try:
         from database.predictions_repo import tahmin_kaydet_db
-        su = istek.su_parametreleri
         tahmin_kaydet_db(
             dosya_adi        = istek.dosya_adi,
             sinif            = sinif,
             sinif_adi        = sinif_adi,
-            olasilik         = round(float(y_prob), 4),
+            olasilik         = round(y_prob, 4),
             esik             = istek.esik,
-            su_parametreleri = {
-                'ph'             : su.ph,
-                'Hardness'       : su.Hardness,
-                'Solids'         : su.Solids,
-                'Chloramines'    : su.Chloramines,
-                'Sulfate'        : su.Sulfate,
-                'Conductivity'   : su.Conductivity,
-                'Organic_carbon' : su.Organic_carbon,
-                'Trihalomethanes': su.Trihalomethanes,
-                'Turbidity'      : su.Turbidity
-            }
+            su_parametreleri = istek.su_parametreleri.model_dump()
         )
     except Exception as e:
         print(f'Tahmin DB kayıt uyarısı: {e}')
@@ -294,9 +173,9 @@ def tahmin_yap(istek: TahminIstek):
     return TahminYaniti(
         sinif       = sinif,
         sinif_adi   = sinif_adi,
-        olasilik    = round(float(y_prob), 4),
-        model_adi   = model_adi,
-        goruntu_adi = goruntu_adi,
+        olasilik    = round(y_prob, 4),
+        model_adi   = paket['model_adi'],
+        goruntu_adi = paket.get('goruntu_adi', paket['model_adi']),
         esik        = istek.esik
     )
 
@@ -396,6 +275,7 @@ def model_notu_guncelle_endpoint(dosya_adi: str, not_metni: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 # ─────────────────────────────────────────
 # TOPLU TAHMİN ENDPOINTİ
 # ─────────────────────────────────────────
@@ -403,189 +283,76 @@ def model_notu_guncelle_endpoint(dosya_adi: str, not_metni: str):
 @router.post('/predict/batch')
 def toplu_tahmin(istek: dict):
     """
-    Birden fazla su örneği için toplu tahmin yapar.
-    Maksimum 1000 satır desteklenir.
-
-    Her satır için:
-    - Pipeline uygulanır (eksik değerler doldurulur)
-    - Model tahmini yapılır
-    - Veritabanına kaydedilir
+    Birden fazla su örneği için toplu tahmin (en fazla 1000 satır).
+    Her satır modelin kendi pipeline'ından geçer; sonuçlar veritabanına yazılır.
     """
-    from schemas.predict_schemas import (
-        TopluTahminIstek, TopluTahminYaniti, TopluTahminSatir
-    )
-    import pandas as pd
+    dosya_adi  = istek.get('dosya_adi')
+    model_turu = istek.get('model_turu')
+    su_listesi = istek.get('su_listesi') or []
+    esik       = istek.get('esik', 0.5)
 
-    # Manuel parse — FastAPI'nin otomatik parse'ı için
-    try:
-        if not isinstance(istek, dict):
-            istek_dict = istek.dict()
-        else:
-            istek_dict = istek
-    except Exception:
-        istek_dict = istek
-
-    dosya_adi  = istek_dict['dosya_adi']
-    model_turu = istek_dict['model_turu']
-    su_listesi = istek_dict['su_listesi']
-    esik       = istek_dict.get('esik', 0.5)
-
-    # Boyut kontrolü
+    if not dosya_adi:
+        raise HTTPException(status_code=400, detail='dosya_adi zorunlu.')
     if len(su_listesi) > 1000:
-        raise HTTPException(
-            status_code = 400,
-            detail      = 'Maksimum 1000 satır desteklenir.'
-        )
+        raise HTTPException(status_code=400, detail='Maksimum 1000 satır desteklenir.')
     if len(su_listesi) == 0:
+        raise HTTPException(status_code=400, detail='Boş liste gönderilemez.')
+
+    paket, olasilik_hesapla = _tahminci_getir(dosya_adi)
+    if model_turu and model_turu != paket.get('model_turu'):
         raise HTTPException(
             status_code = 400,
-            detail      = 'Boş liste gönderilemez.'
+            detail      = f"{dosya_adi} bir '{paket.get('model_turu')}' modeli."
         )
+    model_adi = paket['model_adi']
+    gor_adi   = paket.get('goruntu_adi', model_adi)
 
-    # Pipeline yükle
+    satirlar = [{k: su.get(k) for k in OZELLIK_KOLONLARI} for su in su_listesi]
+    sonuclar, basarili, hatali, icilir_sayi, icilmez_sayi = [], 0, 0, 0, 0
+
     try:
-        pipe = pipeline_yukle()
+        y_prob = olasilik_hesapla(pd.DataFrame(satirlar))
     except Exception as e:
-        raise HTTPException(
-            status_code = 500,
-            detail      = f'Pipeline hatası: {str(e)}'
-        )
+        hatali = len(satirlar)
+        sonuclar = [
+            TopluTahminSatir(satir_no=i + 1, sinif=-1, sinif_adi='Hata',
+                             olasilik=0.0, hata=str(e))
+            for i in range(len(satirlar))
+        ]
+        y_prob = None
 
-    # Model yükle
-    try:
-        if model_turu == 'ml':
-            meta      = model_yukle(dosya_adi)
-            model_obj = meta['model']
-            model_adi = meta['model_adi']
-            gor_adi   = meta.get('goruntu_adi', model_adi)
-        elif model_turu == 'dl':
-            from dl.dl_garage import ann_yukle
-            import torch
-            device    = torch.device(
-                'cuda' if torch.cuda.is_available() else 'cpu'
-            )
-            ann_model, dl_meta = ann_yukle(dosya_adi)
-            model_adi = 'ann'
-            gor_adi   = dl_meta.get('goruntu_adi', 'ann')
-        else:
-            raise HTTPException(
-                status_code = 400,
-                detail      = 'model_turu ml veya dl olmalı.'
-            )
-    except HTTPException:
-        raise
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code = 404,
-            detail      = f'Model bulunamadı: {dosya_adi}'
-        )
-
-    # Toplu işlem
-    sonuclar     = []
-    basarili     = 0
-    hatali       = 0
-    icilir_sayi  = 0
-    icilmez_sayi = 0
-
-    # Tüm geçerli satırları topla
-    gecerli_satirlar = []
-    gecerli_indeksler = []
-
-    for i, su in enumerate(su_listesi):
-        try:
-            satir = {k: su.get(k) for k in OZELLIK_KOLONLARI}
-            gecerli_satirlar.append(satir)
-            gecerli_indeksler.append(i)
-        except Exception as e:
+    if y_prob is not None:
+        from database.predictions_repo import tahmin_kaydet_db
+        for i, (satir, prob) in enumerate(zip(satirlar, y_prob)):
+            sinif     = 1 if float(prob) >= esik else 0
+            sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
+            olasilik  = round(float(prob), 4)
+            if sinif == 1:
+                icilir_sayi += 1
+            else:
+                icilmez_sayi += 1
+            basarili += 1
             sonuclar.append(TopluTahminSatir(
-                satir_no  = i + 1,
-                sinif     = -1,
-                sinif_adi = 'Hata',
-                olasilik  = 0.0,
-                hata      = str(e)
+                satir_no=i + 1, sinif=sinif, sinif_adi=sinif_adi, olasilik=olasilik
             ))
-            hatali += 1
+            try:
+                tahmin_kaydet_db(
+                    dosya_adi=dosya_adi, sinif=sinif, sinif_adi=sinif_adi,
+                    olasilik=olasilik, esik=esik, su_parametreleri=satir
+                )
+            except Exception:
+                pass
 
-    # Toplu pipeline transform
-    if gecerli_satirlar:
-        try:
-            df_batch = pd.DataFrame(gecerli_satirlar)
-            X_batch  = pipe.transform(df_batch)
-
-            # Tahmin
-            if model_turu == 'ml':
-                y_pred = model_obj.predict(X_batch)
-                if hasattr(model_obj, 'predict_proba'):
-                    y_prob = model_obj.predict_proba(X_batch)[:, 1]
-                else:
-                    y_prob = y_pred.astype(float)
-
-            elif model_turu == 'dl':
-                from dl.dl_garage import ann_tahmin
-                tahmin_sonuc = ann_tahmin(ann_model, X_batch, device)
-                y_pred = np.array(tahmin_sonuc['sinif'])
-                y_prob = np.array(tahmin_sonuc['olasilik'])
-
-            # Eşik uygula ve sonuçları oluştur
-            for j, (idx, pred, prob) in enumerate(
-                zip(gecerli_indeksler, y_pred, y_prob)
-            ):
-                sinif     = 1 if float(prob) >= esik else 0
-                sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
-                olasilik  = round(float(prob), 4)
-
-                if sinif == 1:
-                    icilir_sayi += 1
-                else:
-                    icilmez_sayi += 1
-                basarili += 1
-
-                sonuclar.append(TopluTahminSatir(
-                    satir_no  = idx + 1,
-                    sinif     = sinif,
-                    sinif_adi = sinif_adi,
-                    olasilik  = olasilik
-                ))
-
-                # Veritabanına kaydet
-                try:
-                    from database.predictions_repo import tahmin_kaydet_db
-                    tahmin_kaydet_db(
-                        dosya_adi        = dosya_adi,
-                        sinif            = sinif,
-                        sinif_adi        = sinif_adi,
-                        olasilik         = olasilik,
-                        esik             = esik,
-                        su_parametreleri = gecerli_satirlar[j]
-                    )
-                except Exception:
-                    pass
-
-        except Exception as e:
-            for idx in gecerli_indeksler:
-                sonuclar.append(TopluTahminSatir(
-                    satir_no  = idx + 1,
-                    sinif     = -1,
-                    sinif_adi = 'Hata',
-                    olasilik  = 0.0,
-                    hata      = str(e)
-                ))
-                hatali += len(gecerli_indeksler)
-
-    # Satır numarasına göre sırala
-    sonuclar.sort(key=lambda x: x.satir_no)
     toplam = basarili + hatali
-
     return {
         'toplam'      : toplam,
         'basarili'    : basarili,
         'hatali'      : hatali,
         'icilir_sayi' : icilir_sayi,
         'icilmez_sayi': icilmez_sayi,
-        'icilir_oran' : round(icilir_sayi / basarili, 4)
-                        if basarili > 0 else 0,
+        'icilir_oran' : round(icilir_sayi / basarili, 4) if basarili > 0 else 0,
         'model_adi'   : model_adi,
         'goruntu_adi' : gor_adi,
         'esik'        : esik,
-        'sonuclar'    : [s.dict() for s in sonuclar]
+        'sonuclar'    : [s.model_dump() for s in sonuclar]
     }
