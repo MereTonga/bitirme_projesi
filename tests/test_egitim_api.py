@@ -142,6 +142,7 @@ def test_her_model_kendi_pipelineiyla_tahmin_yapar(istemci):
         gov = r.json()
         assert gov['sinif'] in (0, 1) and 0.0 <= gov['olasilik'] <= 1.0
         assert gov['model_adi'] == 'decision_tree'
+        assert gov['db_kaydedildi'] is True
 
     # Tür uyuşmazlığı 400, olmayan model 404
     r = istemci.post('/predict', json={'dosya_adi': robust['dosya_adi'], 'model_turu': 'dl',
@@ -234,3 +235,18 @@ def test_shap_aciklama_ann(istemci):
     p   = _tahmin_olasiligi(istemci, ann['dosya_adi'], 'dl')
     assert 0.0 < gov['beklenen_deger'] < 1.0                  # artık sabit 0.0 değil
     assert abs(gov['waterfall']['final'] - p) < 0.10          # GradientExplainer yaklaşık
+
+
+def test_tahmin_db_hatasinda_kaydedilmedi_bildirilir(istemci, monkeypatch):
+    """DB yazımı başarısızsa tahmin yine döner ama db_kaydedildi=False olur."""
+    m = _egit(istemci, '/train/ml/naive_bayes', {})
+    import database.predictions_repo as repo
+
+    def _patla(**kwargs):
+        raise RuntimeError('disk dolu')
+    monkeypatch.setattr(repo, 'tahmin_kaydet_db', _patla)
+
+    r = istemci.post('/predict', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                       'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text
+    assert r.json()['db_kaydedildi'] is False

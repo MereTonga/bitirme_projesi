@@ -67,6 +67,8 @@ with col2:
         st.caption('Backend çalışıyor mu?')
     else:
         st.success('API Bağlı')
+        # DL sekmesi eğitim mesajında gerçek cihazı göstermek için
+        st.session_state['backend_gpu'] = (saglik.get('gpu_adi') or 'GPU') if saglik.get('gpu') else None
         if saglik.get('gpu'):
             st.caption(f"🎮 {saglik.get('gpu_adi', 'GPU')}")
         else:

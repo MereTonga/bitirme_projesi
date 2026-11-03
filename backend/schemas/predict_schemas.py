@@ -78,6 +78,7 @@ class TahminYaniti(BaseModel):
     model_adi       : str
     goruntu_adi     : str
     esik            : float
+    db_kaydedildi   : bool = True   # tahmin geçmişine yazılabildi mi
 
 
 # ─────────────────────────────────────────

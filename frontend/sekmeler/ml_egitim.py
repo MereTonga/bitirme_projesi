@@ -451,7 +451,7 @@ def goster():
                 if 'hata' in sonuc:
                     st.error(f'❌ Hata: {sonuc["hata"]}')
                 else:
-                    st.success('✅ Model eğitildi ve garajа kaydedildi!')
+                    st.success('✅ Model eğitildi ve garaja kaydedildi!')
                     st.session_state['son_ml_sonuc'] = sonuc
                     st.session_state['son_ml_shap_ozet'] = None
 
@@ -556,7 +556,7 @@ def goster():
                 hide_index=True
             )
             st.success(
-                f'💾 Garajа kaydedildi: `{sonuc["dosya_adi"]}`'
+                f'💾 Garaja kaydedildi: `{sonuc["dosya_adi"]}`'
             )
 
         # SHAP Özet

@@ -218,10 +218,9 @@ def goster():
             payload['ozel_isim'] = ozel_isim
 
         if dl_mod == '🔄 Senkron (Bekle)':
-            with st.spinner(
-                f'ANN eğitiliyor... '
-                f'(max {epochs} epoch, GPU aktif 🎮)'
-            ):
+            gpu = st.session_state.get('backend_gpu')
+            cihaz = f'🎮 {gpu}' if gpu else '💻 CPU'
+            with st.spinner(f'ANN eğitiliyor... (max {epochs} epoch, {cihaz})'):
                 sonuc = ann_egit(payload)
 
             if 'hata' in sonuc:

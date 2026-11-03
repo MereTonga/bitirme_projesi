@@ -157,6 +157,7 @@ def tahmin_yap(istek: TahminIstek):
     sinif     = 1 if y_prob >= istek.esik else 0
     sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
 
+    db_kaydedildi = True
     try:
         from database.predictions_repo import tahmin_kaydet_db
         tahmin_kaydet_db(
@@ -168,6 +169,7 @@ def tahmin_yap(istek: TahminIstek):
             su_parametreleri = istek.su_parametreleri.model_dump()
         )
     except Exception as e:
+        db_kaydedildi = False
         print(f'Tahmin DB kayıt uyarısı: {e}')
 
     return TahminYaniti(
@@ -175,8 +177,9 @@ def tahmin_yap(istek: TahminIstek):
         sinif_adi   = sinif_adi,
         olasilik    = round(y_prob, 4),
         model_adi   = paket['model_adi'],
-        goruntu_adi = paket.get('goruntu_adi', paket['model_adi']),
-        esik        = istek.esik
+        goruntu_adi   = paket.get('goruntu_adi', paket['model_adi']),
+        esik          = istek.esik,
+        db_kaydedildi = db_kaydedildi,
     )
 
 

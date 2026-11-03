@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -363,9 +365,12 @@ def goster():
 
                 st.caption(
                     f'Model: {sonuc["goruntu_adi"]} '
-                    f'({girdi["model_turu"].upper()}) — '
-                    f'Tahmin veritabanına kaydedildi ✅'
+                    f'({girdi["model_turu"].upper()})'
+                    + (' — Tahmin geçmişine kaydedildi ✅'
+                       if sonuc.get('db_kaydedildi', True) else '')
                 )
+                if not sonuc.get('db_kaydedildi', True):
+                    st.warning('⚠️ Tahmin yapıldı ancak tahmin geçmişine kaydedilemedi.')
 
                 # SHAP Waterfall
                 st.divider()
@@ -670,9 +675,13 @@ def _toplu_tahmin_sekmesi(tum_modeller):
 
         if 'hata' in sonuc:
             st.error(f'❌ Hata: {sonuc["hata"]}')
+            # Eski sonuç ekranda kalıp yeni dosya/modelin sonucu sanılmasın
+            for anahtar in ('toplu_sonuc', 'toplu_df_yuklu', 'toplu_model'):
+                st.session_state.pop(anahtar, None)
         else:
-            st.session_state['toplu_sonuc']   = sonuc
+            st.session_state['toplu_sonuc']    = sonuc
             st.session_state['toplu_df_yuklu'] = df_yuklu
+            st.session_state['toplu_model']    = dict(secili)
 
     # ── Sonuçları Göster ──────────────────────────────────────
     if not st.session_state.get('toplu_sonuc'):
@@ -680,9 +689,19 @@ def _toplu_tahmin_sekmesi(tum_modeller):
 
     sonuc   = st.session_state['toplu_sonuc']
     df_orig = st.session_state.get('toplu_df_yuklu', pd.DataFrame())
+    # Sonucu üreten model (selectbox sonradan değişmiş olabilir)
+    tahmin_modeli = st.session_state.get('toplu_model') or secili
 
     st.divider()
     st.subheader('📊 Tahmin Sonuçları')
+    st.caption(
+        f"Model: {tahmin_modeli['goruntu_adi']} "
+        f"({tahmin_modeli['model_turu'].upper()}) · Eşik: {sonuc.get('esik', toplu_esik):.2f}"
+    )
+    if tahmin_modeli['dosya_adi'] != secili['dosya_adi']:
+        st.info('ℹ️ Bu sonuçlar önceki seçili modele ait; yeni model için tekrar tahmin yapın.')
+    if not df_yuklu.equals(df_orig):
+        st.info('ℹ️ Bu sonuçlar önceki yüklenen dosyaya ait; yeni dosya için tekrar tahmin yapın.')
 
     # Özet kartları
     sk1, sk2, sk3, sk4 = st.columns(4)
@@ -783,7 +802,7 @@ def _toplu_tahmin_sekmesi(tum_modeller):
     st.download_button(
         label     = '⬇️ Sonuç CSV İndir',
         data      = csv_sonuc,
-        file_name = f'tahmin_sonuclari_{secili["model_adi"]}.csv',
+        file_name = f'tahmin_sonuclari_{os.path.splitext(tahmin_modeli["dosya_adi"])[0]}.csv',
         mime      = 'text/csv',
         key       = 'sonuc_indir'
     )
