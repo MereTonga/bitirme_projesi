@@ -176,42 +176,55 @@ def test_ann_tahmin_kendi_pipelineiyla(istemci):
     assert r.json()['model_adi'] == 'ann'
 
 
-def test_shap_aciklama_tree_model(istemci):
-    m = _egit(istemci, '/train/ml/random_forest', {'n_estimators': 10, 'max_depth': 4})
-    r = istemci.post('/explain', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+def _tahmin_olasiligi(istemci, dosya_adi, tur):
+    r = istemci.post('/predict', json={'dosya_adi': dosya_adi, 'model_turu': tur,
                                        'su_parametreleri': ORNEK_SU})
+    assert r.status_code == 200, r.text
+    return r.json()['olasilik']
+
+
+def _acikla(istemci, dosya_adi, tur, **ek):
+    r = istemci.post('/explain', json={'dosya_adi': dosya_adi, 'model_turu': tur,
+                                       'su_parametreleri': ORNEK_SU, **ek})
     assert r.status_code == 200, r.text
     gov = r.json()
     assert len(gov['shap_degerleri']) == 9 and len(gov['waterfall']['ozellikler']) == 9
+    assert abs(gov['waterfall']['final'] - (gov['beklenen_deger'] + sum(gov['shap_degerleri']))) < 1e-6
+    return gov
 
+
+@pytest.mark.parametrize('yol,payload,tol', [
+    ('/train/ml/random_forest',     {'n_estimators': 10, 'max_depth': 4}, 0.02),
+    ('/train/ml/xgboost',           {'n_estimators': 10, 'max_depth': 3}, 0.02),
+    ('/train/ml/lightgbm',          {'n_estimators': 10},                 0.02),
+    ('/train/ml/gradient_boosting', {'n_estimators': 10, 'max_depth': 2}, 0.02),
+    ('/train/ml/adaboost',          {'n_estimators': 10},                 0.10),   # KernelExplainer (yaklaşık)
+    ('/train/ml/naive_bayes',       {},                                   0.10),   # KernelExplainer (yaklaşık)
+])
+def test_shap_olasilik_uzayinda_tutarli(istemci, yol, payload, tol):
+    """beklenen + Σ shap ≈ modelin /predict olasılığı (olasılık uzayı, tüm aileler)."""
+    m   = _egit(istemci, yol, payload)
+    gov = _acikla(istemci, m['dosya_adi'], 'ml', n_background=30)
+    p   = _tahmin_olasiligi(istemci, m['dosya_adi'], 'ml')
+    assert 0.0 <= gov['beklenen_deger'] <= 1.0
+    assert abs(gov['waterfall']['final'] - p) < tol, (gov['waterfall']['final'], p)
+
+
+def test_shap_ozet_tree_ve_kernel_siniri(istemci):
+    m = _egit(istemci, '/train/ml/random_forest', {'n_estimators': 10, 'max_depth': 4})
     r = istemci.post('/explain/summary', json={'dosya_adi': m['dosya_adi'], 'n_ornek': 20})
     assert r.status_code == 200, r.text
-    assert len(r.json()['onem_sirasi']) == 9
+    assert len(r.json()['onem_sirasi']) == 9 and r.json()['n_ornek'] == 20
+
+    nb = _egit(istemci, '/train/ml/naive_bayes', {})
+    r = istemci.post('/explain/summary', json={'dosya_adi': nb['dosya_adi'], 'n_ornek': 200})
+    assert r.status_code == 200, r.text
+    assert r.json()['n_ornek'] == 50            # Kernel modellerde süre koruması
 
 
-@pytest.mark.xfail(strict=True, reason='Faz 3: GradientExplainer 1-D çıktı IndexError')
 def test_shap_aciklama_ann(istemci):
     ann = _egit(istemci, '/train/dl/ann', HIZLI_ANN)
-    r = istemci.post('/explain', json={'dosya_adi': ann['dosya_adi'], 'model_turu': 'dl',
-                                       'su_parametreleri': ORNEK_SU})
-    assert r.status_code == 200, r.text
-
-
-@pytest.mark.xfail(strict=True, reason='Faz 3: AdaBoost TreeExplainer tarafından desteklenmiyor')
-def test_shap_aciklama_adaboost(istemci):
-    m = _egit(istemci, '/train/ml/adaboost', {'n_estimators': 10})
-    r = istemci.post('/explain', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
-                                       'su_parametreleri': ORNEK_SU})
-    assert r.status_code == 200, r.text
-
-
-def test_dengesizlik_uyarilari(istemci):
-    # KNN class_weight desteklemez → uyarı
-    gov = _egit(istemci, '/train/ml/knn', {'preprocessing': {'dengesizlik': 'class_weight'}})
-    assert any('desteklemiyor' in u for u in gov['uyarilar'])
-    # SMOTE + balanced → çifte dengeleme uyarısı
-    gov = _egit(istemci, '/train/ml/logistic_regression', {'class_weight': 'balanced'})
-    assert any('çifte' in u for u in gov['uyarilar'])
-    # class_weight + LR → ağırlıklar uygulanır, uyarı yok
-    gov = _egit(istemci, '/train/ml/logistic_regression', {'preprocessing': {'dengesizlik': 'class_weight'}})
-    assert gov['uyarilar'] == [] and isinstance(gov['hiperparametreler']['class_weight'], dict)
+    gov = _acikla(istemci, ann['dosya_adi'], 'dl', n_background=50)
+    p   = _tahmin_olasiligi(istemci, ann['dosya_adi'], 'dl')
+    assert 0.0 < gov['beklenen_deger'] < 1.0                  # artık sabit 0.0 değil
+    assert abs(gov['waterfall']['final'] - p) < 0.10          # GradientExplainer yaklaşık

@@ -1,253 +1,205 @@
+"""
+SHAP açıklamaları — tüm modeller için OLASILIK uzayında.
+
+    Ağaç modelleri (DT, RF, GB, XGB, LGBM) : TreeExplainer, model_output='probability'
+                                            (interventional, background verisiyle)
+    AdaBoost, KNN, SVM, LR, NB             : KernelExplainer(predict_proba)
+    ANN (PyTorch)                           : GradientExplainer, sigmoid çıkışlı sarmalayıcı
+
+Böylece her model için  beklenen_deger + Σ shap ≈ P(içilebilir)  tutarlıdır ve
+frontend tek bir waterfall tanımıyla çizebilir.
+"""
 import numpy as np
 import shap
-from config import OZELLIK_KOLONLARI
 
-# Tree-based modeller için TreeExplainer kullanılır
-# Diğerleri için KernelExplainer (daha yavaş ama evrensel)
+from config import OZELLIK_KOLONLARI, RANDOM_STATE
+
+# TreeExplainer'ın desteklediği ağaç modelleri (AdaBoost desteklenmiyor → Kernel)
 TREE_MODELLER = {
-    'random_forest', 'decision_tree',
-    'gradient_boosting', 'xgboost',
-    'lightgbm', 'adaboost'
+    'decision_tree', 'random_forest',
+    'gradient_boosting', 'xgboost', 'lightgbm'
 }
+
+
+def _background(X, n, seed=RANDOM_STATE):
+    """Background verisinden tekrar üretilebilir rastgele alt küme."""
+    X = np.asarray(X)
+    if len(X) <= n:
+        return X
+    idx = np.random.RandomState(seed).choice(len(X), n, replace=False)
+    return X[idx]
 
 
 # ─────────────────────────────────────────
 # 1. EXPLAINER OLUŞTUR
 # ─────────────────────────────────────────
 
-def explainer_olustur(model_adi, model_obj, X_train_ornekler):
+def explainer_olustur(model_adi, model_obj, X_train, n_background=100):
     """
-    Model tipine göre uygun SHAP explainer oluşturur.
-
-    Tree-based modeller → TreeExplainer (hızlı)
-    Diğerleri          → KernelExplainer (yavaş ama evrensel)
+    Model tipine göre SHAP explainer kurar.
 
     Parametreler:
-        model_adi         : 'random_forest', 'knn' vb.
-        model_obj         : Eğitilmiş sklearn model objesi
-        X_train_ornekler  : Background data için küçük örnek
-                            (KernelExplainer için gerekli)
-
-    Döndürür:
-        explainer: SHAP explainer objesi
+        model_adi    : 'random_forest', 'knn' vb.
+        model_obj    : Eğitilmiş sklearn/xgboost/lightgbm modeli
+        X_train      : Pipeline'dan geçmiş eğitim verisi (background kaynağı)
+        n_background : Background örnek sayısı (hız / doğruluk dengesi)
     """
+    bg = _background(X_train, n_background)
     if model_adi in TREE_MODELLER:
-        return shap.TreeExplainer(model_obj)
-    else:
-        # KernelExplainer için küçük background seti kullan
-        # Büyük veri setinde çok yavaş olur
-        ornekler = shap.sample(X_train_ornekler, 100)
-        return shap.KernelExplainer(
-            model_obj.predict_proba,
-            ornekler
+        return shap.TreeExplainer(
+            model_obj, data=bg,
+            feature_perturbation='interventional',
+            model_output='probability'
         )
+    return shap.KernelExplainer(model_obj.predict_proba, bg)
 
 
 # ─────────────────────────────────────────
-# 2. TEK ÖRNEK SHAP DEĞERLERİ
+# 2. ŞEKİL NORMALİZASYONU
 # ─────────────────────────────────────────
 
-def tek_ornek_shap(explainer, X_ornek, model_adi):
+def _pozitif_sinif(shap_vals):
     """
-    Tek bir örnek için SHAP değerlerini hesaplar.
-    Pozitif sınıf (İçilebilir=1) için değerleri döndürür.
+    shap_values çıktısını (n, 9) pozitif sınıf matrisine indirger.
+    Olası şekiller: (n,9) | (n,9,2) | (2,n,9) | [arr_sinif0, arr_sinif1] | (n,9,1)
+    """
+    if isinstance(shap_vals, list):
+        shap_vals = shap_vals[1] if len(shap_vals) == 2 else shap_vals[0]
+    arr = np.asarray(shap_vals)
+    if arr.ndim == 3:
+        if arr.shape[-1] == 2:
+            arr = arr[:, :, 1]
+        elif arr.shape[0] == 2:
+            arr = arr[1]
+        else:
+            arr = arr[:, :, 0]
+    return arr
 
-    Parametreler:
-        explainer : SHAP explainer objesi
-        X_ornek   : numpy array shape (1, 9)
-        model_adi : Model adı (shape kontrolü için)
+
+def _beklenen(explainer):
+    """expected_value skaler, liste veya dizi olabilir → pozitif sınıf float."""
+    ev = getattr(explainer, 'expected_value', 0.0)
+    if isinstance(ev, (list, tuple, np.ndarray)):
+        ev = np.asarray(ev).ravel()
+        return float(ev[1]) if len(ev) > 1 else float(ev[0])
+    return float(ev)
+
+
+# ─────────────────────────────────────────
+# 3. TEK ÖRNEK SHAP
+# ─────────────────────────────────────────
+
+def tek_ornek_shap(explainer, X_ornek, model_adi=None):
+    """
+    Tek örnek (1, 9) için pozitif sınıf SHAP değerleri.
 
     Döndürür:
-        {
-            'shap_degerleri': list[float],  9 değer
-            'beklenen_deger': float,
-            'ozellik_isimleri': list[str],
-            'ozellik_degerleri': list[float]
-        }
+        {'shap_degerleri': [9], 'beklenen_deger': float,
+         'ozellik_isimleri': [9], 'ozellik_degerleri': [9]}
     """
-    shap_vals = explainer.shap_values(X_ornek)
-
-    # Shape normalize et — (1,9,2) veya (2,1,9) formatlarını handle et
-    shap_vals_np = np.array(shap_vals)
-
-    if shap_vals_np.ndim == 3:
-        # (1, 9, 2) → pozitif sınıf son eksen index 1
-        if shap_vals_np.shape[-1] == 2:
-            shap_pozitif = shap_vals_np[0, :, 1]
-        # (2, 1, 9) → pozitif sınıf ilk eksen index 1
-        elif shap_vals_np.shape[0] == 2:
-            shap_pozitif = shap_vals_np[1, 0, :]
-        else:
-            shap_pozitif = shap_vals_np[0, :, 0]
-    elif shap_vals_np.ndim == 2:
-        # (1, 9) → direkt al
-        shap_pozitif = shap_vals_np[0]
-    else:
-        shap_pozitif = shap_vals_np
-
-    # Beklenen değer
-    beklenen = explainer.expected_value
-    if isinstance(beklenen, (list, np.ndarray)):
-        beklenen = float(beklenen[1]) if len(beklenen) > 1 \
-                   else float(beklenen[0])
-    else:
-        beklenen = float(beklenen)
-
+    X_ornek = np.asarray(X_ornek, dtype=float)
+    shap_pozitif = _pozitif_sinif(explainer.shap_values(X_ornek))[0]
     return {
-        'shap_degerleri'  : shap_pozitif.tolist(),
-        'beklenen_deger'  : beklenen,
-        'ozellik_isimleri': OZELLIK_KOLONLARI,
-        'ozellik_degerleri': X_ornek[0].tolist()
-    }
-
-
-# ─────────────────────────────────────────
-# 3. ÖZET SHAP (Model Geneli)
-# ─────────────────────────────────────────
-
-def ozet_shap(explainer, X_test, model_adi):
-    """
-    Test seti üzerinde özet SHAP değerlerini hesaplar.
-    Özellik önemi sıralaması için kullanılır.
-
-    Parametreler:
-        explainer : SHAP explainer
-        X_test    : numpy array (n, 9)
-        model_adi : Model adı
-
-    Döndürür:
-        {
-            'ortalama_abs_shap': list[float],  9 değer
-            'ozellik_isimleri' : list[str],
-            'onem_sirasi'      : list[str]     önem sırasına göre
-        }
-    """
-    # Büyük test setinde maksimum 200 örnek kullan
-    n_ornek = min(200, len(X_test))
-    X_ornekler = X_test[:n_ornek]
-
-    shap_vals = explainer.shap_values(X_ornekler)
-    shap_vals_np = np.array(shap_vals)
-
-    # Pozitif sınıf SHAP değerlerini al
-    if shap_vals_np.ndim == 3:
-        if shap_vals_np.shape[-1] == 2:
-            shap_pozitif = shap_vals_np[:, :, 1]
-        elif shap_vals_np.shape[0] == 2:
-            shap_pozitif = shap_vals_np[1]
-        else:
-            shap_pozitif = shap_vals_np[:, :, 0]
-    else:
-        shap_pozitif = shap_vals_np
-
-    # Ortalama mutlak SHAP değerleri
-    ort_abs = np.abs(shap_pozitif).mean(axis=0)
-
-    # Önem sırası (büyükten küçüğe)
-    sira = np.argsort(ort_abs)[::-1]
-    onem_sirasi = [OZELLIK_KOLONLARI[i] for i in sira]
-
-    return {
-        'ortalama_abs_shap': ort_abs.tolist(),
+        'shap_degerleri'   : [float(v) for v in shap_pozitif],
+        'beklenen_deger'   : _beklenen(explainer),
         'ozellik_isimleri' : OZELLIK_KOLONLARI,
-        'onem_sirasi'      : onem_sirasi,
-        'tum_shap_degerleri': shap_pozitif.tolist()
+        'ozellik_degerleri': [float(v) for v in X_ornek[0]]
     }
 
 
 # ─────────────────────────────────────────
-# 4. WATERFALL VERİSİ
+# 4. ÖZET SHAP (Model Geneli)
+# ─────────────────────────────────────────
+
+def ozet_shap(explainer, X_test, model_adi=None):
+    """
+    Test seti üzerinde ortalama |SHAP| ile özellik önem sırası.
+
+    Döndürür:
+        {'ortalama_abs_shap': [9], 'ozellik_isimleri': [9],
+         'onem_sirasi': [9], 'n_ornek': int}
+    """
+    X_test = np.asarray(X_test, dtype=float)
+    shap_pozitif = _pozitif_sinif(explainer.shap_values(X_test))
+    ort_abs = np.abs(shap_pozitif).mean(axis=0)
+    sira    = np.argsort(ort_abs)[::-1]
+    return {
+        'ortalama_abs_shap': [float(v) for v in ort_abs],
+        'ozellik_isimleri' : OZELLIK_KOLONLARI,
+        'onem_sirasi'      : [OZELLIK_KOLONLARI[i] for i in sira],
+        'n_ornek'          : int(len(X_test))
+    }
+
+
+# ─────────────────────────────────────────
+# 5. WATERFALL VERİSİ
 # ─────────────────────────────────────────
 
 def waterfall_verisi_hazirla(shap_sonuc):
     """
-    Waterfall plot için veri hazırlar.
-    SHAP değerlerini büyükten küçüğe sıralar.
-
-    Streamlit'te Plotly waterfall chart için kullanılır.
-
-    Döndürür:
-        {
-            'ozellikler'  : list[str],
-            'shap_vals'   : list[float],
-            'ozellik_vals': list[float],
-            'beklenen'    : float,
-            'final'       : float
-        }
+    Waterfall için |SHAP|'a göre sıralı katkılar.
+    final = beklenen + Σ shap ≈ modelin P(içilebilir) tahmini.
     """
-    shap_d = np.array(shap_sonuc['shap_degerleri'])
-    isimler = shap_sonuc['ozellik_isimleri']
+    shap_d   = np.array(shap_sonuc['shap_degerleri'])
+    isimler  = shap_sonuc['ozellik_isimleri']
     degerler = shap_sonuc['ozellik_degerleri']
     beklenen = shap_sonuc['beklenen_deger']
 
-    # Mutlak değere göre sırala
     sira = np.argsort(np.abs(shap_d))[::-1]
-
-    sirali_isimler  = [isimler[i]  for i in sira]
-    sirali_shap     = [float(shap_d[i]) for i in sira]
-    sirali_degerler = [float(degerler[i]) for i in sira]
-
-    # Etiketleri zenginleştir
-    zengin_isimler = []
-    for isim, deger in zip(sirali_isimler, sirali_degerler):
-        zengin_isimler.append(f'{isim}={deger:.3f}')
-
     return {
-        'ozellikler'  : zengin_isimler,
-        'shap_vals'   : sirali_shap,
-        'ozellik_vals': sirali_degerler,
-        'beklenen'    : beklenen,
-        'final'       : float(beklenen + sum(sirali_shap))
+        'ozellikler'  : [f'{isimler[i]}={degerler[i]:.3f}' for i in sira],
+        'shap_vals'   : [float(shap_d[i]) for i in sira],
+        'ozellik_vals': [float(degerler[i]) for i in sira],
+        'beklenen'    : float(beklenen),
+        'final'       : float(beklenen + shap_d.sum())
     }
 
 
 # ─────────────────────────────────────────
-# 5. ANN İÇİN SHAP (GradientExplainer)
+# 6. ANN İÇİN SHAP (GradientExplainer)
 # ─────────────────────────────────────────
 
-def ann_shap(model, X_train_ornekler, X_ornek, device):
+def ann_shap(model, X_train, X_ornek, device=None, n_background=100):
     """
-    PyTorch ANN için SHAP değerlerini hesaplar.
-    GradientExplainer kullanır.
+    PyTorch ANN için olasılık uzayında SHAP (GradientExplainer).
 
-    Parametreler:
-        model             : DinamikANN objesi
-        X_train_ornekler  : numpy array — background data
-        X_ornek           : numpy array (1, 9) — açıklanacak örnek
-        device            : torch.device
-
-    Döndürür:
-        shap_sonuc dict (tek_ornek_shap ile aynı format)
+    DinamikANN ham logit'i 1-D (batch,) döndürür; GradientExplainer
+    (batch, n_cikis) bekler. Sarmalayıcı sigmoid uygulayıp (batch, 1) verir;
+    böylece SHAP değerleri doğrudan olasılık katkısıdır ve
+    beklenen_deger = background üzerindeki ortalama P(içilebilir).
     """
     import torch
+    import torch.nn as nn
 
+    class _OlasilikCikisi(nn.Module):
+        def __init__(self, ag):
+            super().__init__()
+            self.ag = ag
+
+        def forward(self, x):
+            return torch.sigmoid(self.ag(x)).unsqueeze(1)
+
+    if device is None:
+        device = next(model.parameters()).device
     model.eval()
+    sarmal = _OlasilikCikisi(model).to(device).eval()
 
-    # Tensor'a çevir
-    background = torch.tensor(
-        shap.sample(X_train_ornekler, 100),
-        dtype=torch.float32
-    ).to(device)
+    bg_np      = _background(X_train, n_background)
+    background = torch.tensor(bg_np, dtype=torch.float32).to(device)
+    X_tensor   = torch.tensor(np.asarray(X_ornek), dtype=torch.float32).to(device)
 
-    X_tensor = torch.tensor(
-        X_ornek, dtype=torch.float32
-    ).to(device)
+    with torch.no_grad():
+        beklenen = float(sarmal(background).mean().item())
 
-    # GradientExplainer
-    explainer = shap.GradientExplainer(model, background)
+    explainer = shap.GradientExplainer(sarmal, background)
     shap_vals = explainer.shap_values(X_tensor)
-
-    shap_vals_np = np.array(shap_vals)
-    if shap_vals_np.ndim == 3:
-        shap_pozitif = shap_vals_np[0, :, 0] \
-                       if shap_vals_np.shape[-1] == 1 \
-                       else shap_vals_np[0]
-    else:
-        shap_pozitif = shap_vals_np[0]
+    if isinstance(shap_vals, list):
+        shap_vals = shap_vals[0]
+    shap_pozitif = np.asarray(shap_vals).reshape(len(X_tensor), -1)[0]
 
     return {
-        'shap_degerleri'   : shap_pozitif.tolist(),
-        'beklenen_deger'   : 0.0,
+        'shap_degerleri'   : [float(v) for v in shap_pozitif],
+        'beklenen_deger'   : beklenen,
         'ozellik_isimleri' : OZELLIK_KOLONLARI,
-        'ozellik_degerleri': X_ornek[0].tolist()
+        'ozellik_degerleri': [float(v) for v in np.asarray(X_ornek)[0]]
     }

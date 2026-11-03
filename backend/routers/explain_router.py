@@ -55,6 +55,7 @@ class OzetAciklamaYaniti(BaseModel):
     ortalama_abs_shap: List[float]
     ozellik_isimleri : List[str]
     onem_sirasi      : List[str]
+    n_ornek          : int = 0           # gerçekten kullanılan örnek sayısı
     model_adi        : str
     goruntu_adi      : str
 
@@ -125,9 +126,11 @@ def tek_ornek_acikla(istek: AciklamaIstek):
             from dl.dl_garage import ann_paketten_olustur
             ann_model  = ann_paketten_olustur(paket)
             device     = next(ann_model.parameters()).device
-            shap_sonuc = ann_shap(ann_model, X_train, X_ornek, device)
+            shap_sonuc = ann_shap(ann_model, X_train, X_ornek, device,
+                                  n_background=istek.n_background)
         else:
-            exp        = explainer_olustur(model_adi, paket['model'], X_train)
+            exp        = explainer_olustur(model_adi, paket['model'], X_train,
+                                           n_background=istek.n_background)
             shap_sonuc = tek_ornek_shap(exp, X_ornek, model_adi)
 
         return AciklamaYaniti(
@@ -153,7 +156,8 @@ def tek_ornek_acikla(istek: AciklamaIstek):
 def ozet_acikla(istek: OzetAciklamaIstek):
     """
     Test seti üzerinde ortalama |SHAP| ile özellik önem sırası üretir
-    (şimdilik sadece ML modelleri).
+    (şimdilik sadece ML modelleri). KernelExplainer gerektiren modellerde
+    (KNN, SVM, LR, NB, AdaBoost) süre koruması için en fazla 50 örnek kullanılır.
     """
     paket, _ = _paket_getir(istek.dosya_adi)
     if paket.get('model_turu') != 'ml':
@@ -164,13 +168,17 @@ def ozet_acikla(istek: OzetAciklamaIstek):
         from explainer import explainer_olustur, ozet_shap
         model_adi = paket['model_adi']
         X_train, X_test = _egitim_verisi(paket)
+        from explainer import TREE_MODELLER
         exp  = explainer_olustur(model_adi, paket['model'], X_train)
         n    = min(istek.n_ornek, len(X_test))
+        if model_adi not in TREE_MODELLER:
+            n = min(n, 50)           # KernelExplainer: örnek başına yüzlerce model çağrısı
         ozet = ozet_shap(exp, X_test[:n], model_adi)
         return OzetAciklamaYaniti(
             ortalama_abs_shap = ozet['ortalama_abs_shap'],
             ozellik_isimleri  = ozet['ozellik_isimleri'],
             onem_sirasi       = ozet['onem_sirasi'],
+            n_ornek           = ozet['n_ornek'],
             model_adi         = model_adi,
             goruntu_adi       = paket.get('goruntu_adi', model_adi)
         )

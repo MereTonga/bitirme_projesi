@@ -1,13 +1,10 @@
 import plotly.graph_objects as go
-import plotly.express as px
-import numpy as np
 
 RENKLER = {
-    'pozitif' : '#EF4444',   # Kırmızı → içilemez yönüne itiyor
-    'negatif' : '#10B981',   # Yeşil  → içilebilir yönüne itiyor
+    'artis'   : '#10B981',   # Yeşil  → içilebilir (1) yönüne itiyor (pozitif SHAP)
+    'azalis'  : '#EF4444',   # Kırmızı → içilemez (0) yönüne itiyor (negatif SHAP)
+    'toplam'  : '#3B82F6',
     'notr'    : '#94A3B8',
-    'birincil': '#3B82F6',
-    'mor'     : '#8B5CF6'
 }
 
 
@@ -17,86 +14,58 @@ RENKLER = {
 
 def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
     """
-    Tek tahmin için SHAP waterfall grafiği.
-
-    Her çubuğun rengi katkı yönüne göre:
-        Kırmızı → içilemez yönüne itiyor (negatif katkı)
-        Yeşil   → içilebilir yönüne itiyor (pozitif katkı)
+    Tek tahmin için gerçek waterfall: beklenen değerden (background ortalama
+    P(içilebilir)) başlar, her özelliğin katkısı kümülatif eklenir, son çubuk
+    modelin bu örnek için verdiği olasılıktır.
 
     Parametreler:
-        waterfall_veri: explainer.waterfall_verisi_hazirla() çıktısı
+        waterfall_veri: /explain yanıtındaki 'waterfall' sözlüğü
     """
     ozellikler = waterfall_veri['ozellikler']
     shap_vals  = waterfall_veri['shap_vals']
     beklenen   = waterfall_veri['beklenen']
+    final      = waterfall_veri['final']
 
-    # Renkleri belirle
-    renkler = [
-        RENKLER['negatif'] if v > 0 else RENKLER['pozitif']
-        for v in shap_vals
-    ]
+    x = ['Beklenen'] + ozellikler + ['Tahmin']
+    y = [beklenen]   + shap_vals  + [final]
+    measure = ['absolute'] + ['relative'] * len(shap_vals) + ['total']
+    etiket  = [f'{beklenen:.3f}'] + [f'{v:+.4f}' for v in shap_vals] + [f'{final:.3f}']
 
-    # Etiketler
-    etiketler = [
-        f'{v:+.4f}' for v in shap_vals
-    ]
-
-    fig = go.Figure()
-
-    # Beklenen değer çizgisi
-    fig.add_hline(
-        y           = beklenen,
-        line_dash   = 'dot',
-        line_color  = RENKLER['notr'],
-        line_width  = 1.5,
-        annotation_text = f'Beklenen: {beklenen:.3f}',
-        annotation_position = 'right'
-    )
-
-    # SHAP bar'ları
-    fig.add_trace(go.Bar(
-        x             = ozellikler,
-        y             = shap_vals,
-        marker_color  = renkler,
-        text          = etiketler,
-        textposition  = 'outside',
-        textfont      = dict(size=11),
-        hovertemplate = (
-            '<b>%{x}</b><br>'
-            'SHAP katkısı: %{y:+.4f}<br>'
-            '<extra></extra>'
-        )
+    fig = go.Figure(go.Waterfall(
+        x            = x,
+        y            = y,
+        measure      = measure,
+        text         = etiket,
+        textposition = 'outside',
+        textfont     = dict(size=11, color='black'),
+        connector    = dict(line=dict(color=RENKLER['notr'], width=1)),
+        increasing   = dict(marker=dict(color=RENKLER['artis'])),
+        decreasing   = dict(marker=dict(color=RENKLER['azalis'])),
+        totals       = dict(marker=dict(color=RENKLER['toplam'])),
+        hovertemplate= '<b>%{x}</b><br>%{text}<extra></extra>'
     ))
 
     fig.update_layout(
         title       = dict(text=baslik, x=0.5, font=dict(size=14, color='black')),
-        height      = 500,
+        height      = 520,
         xaxis_title = dict(text='Özellik (değer)', font=dict(color='black')),
-        yaxis_title = dict(text='SHAP Katkısı', font=dict(color='black')),
+        yaxis_title = dict(text='P(İçilebilir)', font=dict(color='black')),
         plot_bgcolor= 'white',
         paper_bgcolor='white',
         showlegend  = False,
         xaxis_tickangle = -30,
         font        = dict(color='black'),
-        margin      = dict(t=80, b=100)
+        margin      = dict(t=90, b=110)
     )
     fig.update_xaxes(tickfont=dict(color='black'))
-    fig.update_yaxes(tickfont=dict(color='black'))
-    fig.update_yaxes(gridcolor='#F3F4F6', zeroline=True,
-                     zerolinecolor='#CBD5E1', zerolinewidth=1.5)
-
-    # Açıklama notu
+    fig.update_yaxes(tickfont=dict(color='black'), gridcolor='#F3F4F6', range=[0, 1])
+    fig.add_hline(y=0.5, line_dash='dot', line_color=RENKLER['notr'], line_width=1,
+                  annotation_text='eşik 0.5', annotation_position='right')
     fig.add_annotation(
-        x=0.01, y=1.08, xref='paper', yref='paper',
-        text=(
-            '🟢 Yeşil = İçilebilir yönüne itiyor   '
-            '🔴 Kırmızı = İçilemez yönüne itiyor'
-        ),
-        showarrow=False,
+        x=0.01, y=1.10, xref='paper', yref='paper', showarrow=False, align='left',
         font=dict(size=12, color='black'),
-        align='left'
+        text='🟢 Yeşil = İçilebilir yönüne itiyor   🔴 Kırmızı = İçilemez yönüne itiyor   🔵 Mavi = başlangıç / sonuç'
     )
-
     return fig
 
 
@@ -106,8 +75,7 @@ def waterfall_plot(waterfall_veri, baslik='SHAP Waterfall'):
 
 def ozet_bar_plot(ozet_veri, baslik='SHAP Özellik Önemi'):
     """
-    Model geneli ortalama |SHAP| değerlerini bar chart olarak gösterir.
-    Önem sırasına göre sıralı.
+    Model geneli ortalama |SHAP| değerlerini önem sırasına göre yatay bar olarak gösterir.
 
     Parametreler:
         ozet_veri: /explain/summary endpoint yanıtı
@@ -116,18 +84,9 @@ def ozet_bar_plot(ozet_veri, baslik='SHAP Özellik Önemi'):
     ort_abs     = ozet_veri['ortalama_abs_shap']
     isimler     = ozet_veri['ozellik_isimleri']
 
-    # Önem sırasına göre değerleri sırala
-    siralanmis_vals = []
-    for ozellik in onem_sirasi:
-        idx = isimler.index(ozellik)
-        siralanmis_vals.append(ort_abs[idx])
-
-    # Renk gradyanı
+    siralanmis_vals = [ort_abs[isimler.index(o)] for o in onem_sirasi]
     max_val = max(siralanmis_vals) if siralanmis_vals else 1
-    renkler = [
-        f'rgba(59, 130, 246, {0.4 + 0.6 * v / max_val})'
-        for v in siralanmis_vals
-    ]
+    renkler = [f'rgba(59, 130, 246, {0.4 + 0.6 * v / max_val})' for v in siralanmis_vals]
 
     fig = go.Figure(go.Bar(
         x             = siralanmis_vals[::-1],
@@ -136,92 +95,21 @@ def ozet_bar_plot(ozet_veri, baslik='SHAP Özellik Önemi'):
         marker_color  = renkler[::-1],
         text          = [f'{v:.4f}' for v in siralanmis_vals[::-1]],
         textposition  = 'outside',
-        hovertemplate = (
-            '<b>%{y}</b><br>'
-            'Ort |SHAP|: %{x:.4f}<br>'
-            '<extra></extra>'
-        )
+        hovertemplate = '<b>%{y}</b><br>Ort |SHAP|: %{x:.4f}<extra></extra>'
     ))
 
+    n = ozet_veri.get('n_ornek')
+    alt_baslik = f' ({n} test örneği)' if n else ''
     fig.update_layout(
-        title       = dict(text=baslik, x=0.5, font=dict(size=16, color='black')),
+        title       = dict(text=baslik + alt_baslik, x=0.5, font=dict(size=16, color='black')),
         height      = 550,
-        xaxis_title = dict(text='Ortalama |SHAP Değeri|', font=dict(color='black')),
+        xaxis_title = dict(text='Ortalama |SHAP| (olasılık katkısı)', font=dict(color='black')),
         plot_bgcolor= 'white',
-        paper_bgcolor= "white",
+        paper_bgcolor='white',
         showlegend  = False,
         font        = dict(color='black'),
         margin      = dict(l=20, r=80, t=60, b=40)
     )
     fig.update_xaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
     fig.update_yaxes(tickfont=dict(color='black'))
-
-    return fig
-
-
-# ─────────────────────────────────────────
-# 3. BEE SWARM ALTERNATİFİ — SCATTER PLOT
-# ─────────────────────────────────────────
-
-def shap_scatter_plot(ozet_veri, baslik='SHAP Dağılım'):
-    """
-    Her özellik için SHAP değer dağılımını scatter olarak gösterir.
-    Renk: SHAP değerinin işareti (pozitif/negatif)
-
-    Parametreler:
-        ozet_veri: /explain/summary endpoint yanıtı
-        (tum_shap_degerleri alanı gerekli)
-    """
-    if 'tum_shap_degerleri' not in ozet_veri:
-        return None
-
-    tum_shap = np.array(ozet_veri['tum_shap_degerleri'])
-    isimler  = ozet_veri['ozellik_isimleri']
-    onem     = ozet_veri['onem_sirasi']
-
-    fig = go.Figure()
-
-    for i, ozellik in enumerate(onem):
-        idx      = isimler.index(ozellik)
-        shap_col = tum_shap[:, idx]
-
-        renkler = [
-            RENKLER['pozitif'] if v > 0 else RENKLER['negatif']
-            for v in shap_col
-        ]
-
-        fig.add_trace(go.Scatter(
-            x             = shap_col,
-            y             = [ozellik] * len(shap_col),
-            mode          = 'markers',
-            marker        = dict(
-                color   = renkler,
-                size    = 4,
-                opacity = 0.5
-            ),
-            name          = ozellik,
-            showlegend    = False,
-            hovertemplate = (
-                f'<b>{ozellik}</b><br>'
-                'SHAP: %{x:.4f}<br>'
-                '<extra></extra>'
-            )
-        ))
-
-    fig.update_layout(
-        title       = dict(text=baslik, x=0.5, font=dict(size=14, color='black')),
-        height      = 450,
-        xaxis_title = dict(text='SHAP Değeri', font=dict(color='black')),
-        plot_bgcolor= 'white',
-        paper_bgcolor='white',
-        showlegend  = False,
-        font        = dict(color='black')
-    )
-    fig.add_vline(
-        x=0, line_dash='dash',
-        line_color='#CBD5E1', line_width=1.5
-    )
-    fig.update_xaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
-    fig.update_yaxes(gridcolor='#F3F4F6', tickfont=dict(color='black'))
-
     return fig
