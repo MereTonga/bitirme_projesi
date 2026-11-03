@@ -79,13 +79,19 @@ def test_asenkron_ann_garajda_gorunur_ve_epoch_ilerlemesi_calisir(istemci):
 
 
 def test_optimizasyon_senkron_ve_gecmis(istemci):
-    r = istemci.post('/optimize', json={'model_adi': 'knn', 'n_trials': 5})
+    r = istemci.post('/optimize', json={
+        'model_adi': 'knn', 'n_trials': 5,
+        'preprocessing': {'imputer_yontem': 'knn', 'knn_k': 7, 'test_oran': 0.25},
+    })
     assert r.status_code == 200, r.text
     gov = r.json()
     assert gov['toplam_trial'] == 5 and 'n_neighbors' in gov['en_iyi_params']
     assert gov['cv_fold'] == 5 and 0.5 < gov['en_iyi_auc'] < 1.0
     assert gov['test_auc'] is not None and gov['test_auc'] != gov['en_iyi_auc']  # CV skoru ≠ test skoru
     assert all('cv_std' in t for t in gov['trial_gecmisi'])
+    # Yanıt, aramanın yapıldığı preprocessing'i taşır (en iyi parametrelerle eğitimde kullanılır)
+    assert gov['preprocessing']['imputer_yontem'] == 'knn'
+    assert gov['preprocessing']['knn_k'] == 7 and gov['preprocessing']['test_oran'] == 0.25
     gecmis = istemci.get('/optimize/gecmis?model_adi=knn').json()
     assert gecmis and gecmis[0]['en_iyi_auc'] == gov['en_iyi_auc']
     assert gecmis[0]['test_auc'] == gov['test_auc'] and gecmis[0]['cv_fold'] == 5

@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
-from api_client import ml_egit, ozet_acikla, optimize_et, optimizasyon_gecmisi, async_ml_egit
+from api_client import ml_egit, ozet_acikla, optimizasyon_gecmisi, async_ml_egit, async_optimize
 from sekmeler.job_takip import job_takibi
 from ui_ortak import RENKLER, preprocessing_paneli
 
@@ -22,20 +22,6 @@ MODELLER = {
     'lightgbm'           : 'LightGBM',
     'adaboost'           : 'AdaBoost',
     'svm'                : 'SVM'
-}
-
-# Model bazlı tahmini süre (20 trial, saniye)
-TAHMINI_SURE = {
-    'logistic_regression': '~5s',
-    'naive_bayes'        : '~2s',
-    'knn'                : '~10s',
-    'decision_tree'      : '~8s',
-    'random_forest'      : '~45s',
-    'gradient_boosting'  : '~60s',
-    'xgboost'            : '~30s',
-    'lightgbm'           : '~20s',
-    'adaboost'           : '~25s',
-    'svm'                : '~90s'
 }
 
 # ─────────────────────────────────────────
@@ -317,11 +303,13 @@ def goster():
 
         st.info(
             f'**Optuna** {MODELLER[model_adi]} modeli için en iyi '
-            f'hiperparametreleri otomatik bulur. '
-            f'Tahmini süre: **{TAHMINI_SURE.get(model_adi, "?")}** (20 trial)'
+            f'hiperparametreleri arar. Her trial modeli eğitim setinde '
+            f'**k-fold stratified CV** ile değerlendirir; test seti aramaya '
+            f'girmez. Süre ≈ trial × fold × tek eğitim süresi. '
+            f'Arama arka planda çalışır, ilerlemeyi canlı izlersiniz.'
         )
 
-        oc1, oc2 = st.columns(2)
+        oc1, oc2, oc3 = st.columns(3)
         with oc1:
             n_trials = st.slider(
                 'Trial Sayısı',
@@ -333,59 +321,83 @@ def goster():
                 help      = 'Daha fazla trial = Daha iyi sonuç ama daha uzun süre'
             )
         with oc2:
+            cv_fold = st.slider(
+                'CV Fold Sayısı', 3, 10, 5,
+                key  = 'opt_cv_fold',
+                help = 'Her trial bu kadar kez eğitilir. Fazlası daha güvenilir ama yavaş.'
+            )
+        with oc3:
             timeout_aktif = st.checkbox(
-                'Timeout Aktif', value=False, key='opt_timeout_aktif'
+                'Süre Sınırı', value=False, key='opt_timeout_aktif'
             )
             if timeout_aktif:
                 timeout = st.slider(
-                    'Maks. Süre (sn)', 10, 300, 60,
+                    'Maks. Süre (sn)', 10, 600, 120,
                     key='opt_timeout_val'
                 )
             else:
                 timeout = None
                 st.caption('Trial sayısı dolana kadar devam eder.')
 
-        # Optimize butonu
+        opt_calisiyor = bool(st.session_state.get('opt_aktif_job_id'))
         opt_btn = st.button(
-            f'🔍 {MODELLER[model_adi]} Optimize Et ({n_trials} trial)',
-            type = 'primary',
-            key  = 'opt_btn'
+            f'🔍 {MODELLER[model_adi]} Optimize Et ({n_trials} trial × {cv_fold} fold)',
+            type     = 'primary',
+            key      = 'opt_btn',
+            disabled = opt_calisiyor,
+            help     = 'Devam eden optimizasyon bitince tekrar başlatabilirsiniz.' if opt_calisiyor else None
         )
 
         if opt_btn:
-            with st.spinner(
-                f'Optuna çalışıyor... '
-                f'({n_trials} trial, tahmini {TAHMINI_SURE.get(model_adi, "?")})'
-            ):
-                opt_sonuc = optimize_et(
-                    model_adi    = model_adi,
-                    n_trials     = n_trials,
-                    timeout      = timeout,
-                    preprocessing = pre_ayar
-                )
-
-            if 'hata' in opt_sonuc:
-                st.error(f'❌ Hata: {opt_sonuc["hata"]}')
+            job_yanit = async_optimize(
+                model_adi     = model_adi,
+                n_trials      = n_trials,
+                timeout       = timeout,
+                cv_fold       = cv_fold,
+                preprocessing = pre_ayar
+            )
+            if 'hata' in job_yanit:
+                st.error(f'❌ {job_yanit["hata"]}')
             else:
-                st.success(
-                    f'✅ Optimizasyon tamamlandı! '
-                    f'En iyi CV ROC-AUC: **{opt_sonuc["en_iyi_auc"]:.4f}** '
-                    f'(test: {opt_sonuc.get("test_auc", float("nan")):.4f})'
-                )
-                st.session_state['son_opt_sonuc'] = opt_sonuc
+                st.session_state['opt_aktif_job_id'] = job_yanit['job_id']
+                st.rerun()   # buton devre dışı + takip hemen başlasın
 
-        # Optimizasyon sonuçlarını göster
-        if st.session_state.get('son_opt_sonuc'):
-            opt = st.session_state['son_opt_sonuc']
+        # Asenkron optimizasyon takibi
+        job_takibi(
+            'opt_aktif_job_id', 'son_opt_sonuc',
+            basari_mesaji = '✅ Optimizasyon tamamlandı!'
+        )
 
+        # Optimizasyon sonuçlarını göster — yalnızca seçili model için
+        opt = st.session_state.get('son_opt_sonuc')
+        if opt and opt.get('model_adi') != model_adi:
+            st.caption(
+                f"ℹ️ Son optimizasyon **{MODELLER.get(opt.get('model_adi'), opt.get('model_adi'))}** "
+                f"için yapıldı; sonuçlarını görmek için o modeli seçin."
+            )
+            opt = None
+
+        if opt:
             # Özet kartlar
-            ok1, ok2, ok3 = st.columns(3)
+            ok1, ok2, ok3, ok4 = st.columns(4)
             with ok1:
-                st.metric('🏆 En İyi CV AUC', f"{opt['en_iyi_auc']:.4f}",
-                          help=f"{opt.get('cv_fold', 5)}-fold stratified CV ortalaması; test seti aramaya girmez.")
+                st.metric(
+                    '🏆 En İyi CV AUC',
+                    f"{opt['en_iyi_auc']:.4f} ± {opt.get('cv_std', 0):.4f}",
+                    help = f"{opt.get('cv_fold', 5)}-fold stratified CV ortalaması ± std; "
+                           f"test seti aramaya girmez."
+                )
             with ok2:
-                st.metric('🔄 Trial Sayısı', opt['toplam_trial'])
+                test_auc = opt.get('test_auc')
+                st.metric(
+                    '🧪 Test AUC',
+                    f'{test_auc:.4f}' if test_auc is not None else '—',
+                    help = 'En iyi parametrelerle test setinde tek seferlik ölçüm. '
+                           'CV skorundan belirgin düşükse aşırı uyum işaretidir.'
+                )
             with ok3:
+                st.metric('🔄 Trial Sayısı', opt['toplam_trial'])
+            with ok4:
                 st.metric('⏱️ Süre', f"{opt['optimizasyon_suresi']:.1f}s")
 
             # Trial geçmişi grafiği
@@ -407,7 +419,13 @@ def goster():
                 hide_index          = True
             )
 
-            # Bu parametrelerle eğit
+            # Aramanın yapıldığı preprocessing ile eğit (o anki panel değil)
+            opt_pre = opt.get('preprocessing') or pre_ayar
+            st.caption(
+                '⚙️ Arama şu preprocessing ile yapıldı ve eğitimde de aynısı kullanılacak: '
+                + ', '.join(f'`{k}={v}`' for k, v in opt_pre.items())
+            )
+
             st.divider()
             egit_opt_isim = st.text_input(
                 'Model İsmi:',
@@ -423,7 +441,7 @@ def goster():
             if egit_opt_btn:
                 payload = {
                     **opt['en_iyi_params'],
-                    'preprocessing': pre_ayar,
+                    'preprocessing': opt_pre,
                     'ozel_isim': egit_opt_isim
                 }
 
@@ -437,26 +455,27 @@ def goster():
                     st.session_state['son_ml_sonuc'] = sonuc
                     st.session_state['son_ml_shap_ozet'] = None
 
-            # Geçmiş optimizasyonlar
-            with st.expander('📋 Geçmiş Optimizasyonlar'):
-                gecmis = optimizasyon_gecmisi(model_adi=model_adi)
-                if gecmis:
-                    gecmis_df = pd.DataFrame(gecmis)[[
-                        'model_adi', 'en_iyi_auc',
-                        'toplam_trial', 'optimizasyon_suresi',
-                        'kayit_zamani'
-                    ]]
-                    gecmis_df.columns = [
-                        'Model', 'En İyi AUC',
-                        'Trial', 'Süre (s)', 'Zaman'
-                    ]
-                    st.dataframe(
-                        gecmis_df,
-                        use_container_width = True,
-                        hide_index          = True
-                    )
-                else:
-                    st.info('Henüz geçmiş optimizasyon yok.')
+        # Geçmiş optimizasyonlar (veritabanından; bu oturumdan bağımsız)
+        with st.expander('📋 Geçmiş Optimizasyonlar'):
+            gecmis = optimizasyon_gecmisi(model_adi=model_adi)
+            if gecmis:
+                gecmis_df = pd.DataFrame(gecmis)
+                kolonlar = {
+                    'en_iyi_auc'         : 'CV AUC',
+                    'test_auc'           : 'Test AUC',
+                    'cv_fold'            : 'Fold',
+                    'toplam_trial'       : 'Trial',
+                    'optimizasyon_suresi': 'Süre (s)',
+                    'kayit_zamani'       : 'Zaman',
+                }
+                gecmis_df = gecmis_df[[k for k in kolonlar if k in gecmis_df.columns]]
+                st.dataframe(
+                    gecmis_df.rename(columns=kolonlar),
+                    use_container_width = True,
+                    hide_index          = True
+                )
+            else:
+                st.info(f'{MODELLER[model_adi]} için henüz kayıtlı optimizasyon yok.')
 
     # ══════════════════════════════════════════════════════════
     # ASENKRON MOD

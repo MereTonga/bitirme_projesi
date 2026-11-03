@@ -265,12 +265,13 @@ def async_ann_egit(payload: dict) -> dict:
 
 
 def async_optimize(
-    model_adi : str,
-    n_trials  : int  = 20,
-    timeout   : int  = None,
+    model_adi    : str,
+    n_trials     : int  = 20,
+    timeout      : int  = None,
+    cv_fold      : int  = 5,
     preprocessing: dict = None
 ) -> dict:
-    payload = {'model_adi': model_adi, 'n_trials': n_trials}
+    payload = {'model_adi': model_adi, 'n_trials': n_trials, 'cv_fold': cv_fold}
     if timeout:
         payload['timeout'] = timeout
     if preprocessing:

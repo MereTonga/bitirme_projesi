@@ -171,3 +171,5 @@ class OptimizasyonYaniti(BaseModel):
     toplam_trial    : int
     trial_gecmisi   : List[TrialSonuc]
     optimizasyon_suresi: float
+    # Aramanın yapıldığı preprocessing; en iyi parametrelerle eğitimde aynısı kullanılmalı
+    preprocessing   : Optional[PreprocessingAyarlari] = None

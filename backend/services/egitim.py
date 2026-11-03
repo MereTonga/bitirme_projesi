@@ -339,4 +339,5 @@ def optimize_et(istek: OptimizasyonIstek, durum_cb=None, trial_cb=None) -> dict:
         'toplam_trial'       : sonuc['toplam_trial'],
         'trial_gecmisi'      : sonuc['trial_gecmisi'],
         'optimizasyon_suresi': sure,
+        'preprocessing'      : pre.model_dump(),
     }

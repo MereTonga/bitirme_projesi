@@ -9,7 +9,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from config import OZELLIK_KOLONLARI, EKSIK_KOLONLAR
+from config import OZELLIK_KOLONLARI, EKSIK_KOLONLAR, TEST_ORAN
 
 __all__ = [
     'OZELLIK_KOLONLARI', 'EKSIK_KOLONLAR', 'RENKLER',
@@ -77,10 +77,32 @@ def preprocessing_paneli(on_ek: str) -> dict:
                 key = f'{on_ek}_denge'
             )
 
+        c4, c5 = st.columns(2)
+        with c4:
+            if imputer == 'knn':
+                knn_k = st.slider(
+                    'KNN Imputer — K', 1, 20,
+                    value = int(st.session_state.get('aktif_knn_k', 5)),
+                    key   = f'{on_ek}_knn_k'
+                )
+            else:
+                knn_k = int(st.session_state.get('aktif_knn_k', 5))
+                st.caption('K değeri yalnızca KNN imputer seçiliyken kullanılır.')
+        with c5:
+            test_oran = st.slider(
+                'Test seti oranı', 0.10, 0.40,
+                value = TEST_ORAN,
+                step  = 0.05,
+                key   = f'{on_ek}_test_oran',
+                help  = 'Stratified ayrılır. Modelleri karşılaştırırken aynı oranı kullanın.'
+            )
+
     return {
         'imputer_yontem': imputer,
         'scaler_yontem' : scaler,
         'dengesizlik'   : denge,
+        'knn_k'         : knn_k,
+        'test_oran'     : round(test_oran, 2),
     }
 
 
