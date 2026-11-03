@@ -13,11 +13,10 @@ import importlib
 import time
 
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 from data_loader        import veri_yukle
 from pipeline_builder   import veri_hazirla, ham_split
-from ml.evaluator       import model_degerlendir
+from ml.evaluator       import model_degerlendir, metrikleri_hesapla, METRIK_ANAHTARLARI
 from garage_manager     import model_kaydet
 from schemas.ml_schemas import (
     LogisticRegressionIstek, NaiveBayesIstek, KNNIstek,
@@ -149,9 +148,7 @@ def ml_egit(model_adi: str, istek, durum_cb=None) -> dict:
         'model_adi'        : model.model_adi,
         'goruntu_adi'      : kayit['goruntu_adi'],
         'dosya_adi'        : kayit['dosya_adi'],
-        'accuracy'         : metrikler['accuracy'],
-        'f1'               : metrikler['f1'],
-        'roc_auc'          : metrikler['roc_auc'],
+        **{k: metrikler[k] for k in METRIK_ANAHTARLARI},
         'egitim_suresi'    : metrikler['egitim_suresi'],
         'conf_matrix'      : metrikler['conf_matrix'],
         'hiperparametreler': hiper,
@@ -209,11 +206,7 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
     tahmin = ann_tahmin(model, X_test, device)
     y_pred = np.array(tahmin['sinif'])
     y_prob = np.array(tahmin['olasilik'])
-    metrikler = {
-        'accuracy': round(accuracy_score(y_test, y_pred), 4),
-        'f1'      : round(f1_score(y_test, y_pred, zero_division=0), 4),
-        'roc_auc' : round(roc_auc_score(y_test, y_prob), 4),
-    }
+    metrikler = metrikleri_hesapla(y_test, y_pred, y_prob)
 
     _bildir(durum_cb, 95, 'Model kaydediliyor...')
     kayit = ann_kaydet(
@@ -232,9 +225,8 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
         'model_adi'        : 'ann',
         'goruntu_adi'      : kayit['goruntu_adi'],
         'dosya_adi'        : kayit['dosya_adi'],
-        'accuracy'         : metrikler['accuracy'],
-        'f1'               : metrikler['f1'],
-        'roc_auc'          : metrikler['roc_auc'],
+        **{k: metrikler[k] for k in METRIK_ANAHTARLARI},
+        'conf_matrix'      : metrikler['conf_matrix'],
         'egitim_suresi'    : sure,
         'toplam_epoch'     : ozet['toplam_epoch'],
         'en_iyi_epoch'     : ozet['en_iyi_epoch'],

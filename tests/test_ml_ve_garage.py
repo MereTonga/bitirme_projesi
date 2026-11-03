@@ -21,7 +21,7 @@ def test_rf_egit_degerlendir_kaydet_tahmin(hazir_veri, veritabani):
     assert rf.model is not None and rf.egitim_suresi > 0
 
     m = model_degerlendir(rf, X_test, y_test)
-    assert {'accuracy', 'f1', 'roc_auc', 'conf_matrix'} <= set(m)
+    assert {'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc', 'balanced_accuracy', 'conf_matrix'} <= set(m)
     assert 0.5 < m['roc_auc'] <= 1.0
     assert sum(sum(r) for r in m['conf_matrix']) == 656
 

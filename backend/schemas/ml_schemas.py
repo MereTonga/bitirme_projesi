@@ -121,6 +121,10 @@ class MLEgitimYaniti(BaseModel):
     accuracy           : float
     f1                 : float
     roc_auc            : float
+    precision          : Optional[float] = None
+    recall             : Optional[float] = None
+    pr_auc             : Optional[float] = None
+    balanced_accuracy  : Optional[float] = None
     egitim_suresi      : float
     conf_matrix        : List[List[int]]
     hiperparametreler  : Dict[str, Any]

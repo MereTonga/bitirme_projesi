@@ -130,15 +130,20 @@ def hiper_panel(model_adi):
 # ─────────────────────────────────────────
 
 def metrik_kartlari(sonuc):
+    def _m(anahtar):
+        v = sonuc.get(anahtar)
+        return f"{v:.4f}" if isinstance(v, (int, float)) else '-'
+
     k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        st.metric('🎯 Accuracy', f"{sonuc['accuracy']:.4f}")
-    with k2:
-        st.metric('📊 F1 Score', f"{sonuc['f1']:.4f}")
-    with k3:
-        st.metric('📈 ROC-AUC',  f"{sonuc['roc_auc']:.4f}")
-    with k4:
-        st.metric('⏱️ Süre',     f"{sonuc['egitim_suresi']:.4f}s")
+    k1.metric('📈 ROC-AUC',   _m('roc_auc'))
+    k2.metric('📉 PR-AUC',    _m('pr_auc'), help='Average precision; dengesiz veride ROC-AUC\'den daha hassas')
+    k3.metric('📊 F1 Score',  _m('f1'))
+    k4.metric('⏱️ Süre',      f"{sonuc['egitim_suresi']:.4f}s")
+    k5, k6, k7, k8 = st.columns(4)
+    k5.metric('🎯 Accuracy',  _m('accuracy'))
+    k6.metric('⚖️ Balanced Acc.', _m('balanced_accuracy'))
+    k7.metric('🔎 Precision', _m('precision'))
+    k8.metric('📣 Recall',    _m('recall'))
 
 
 # ─────────────────────────────────────────

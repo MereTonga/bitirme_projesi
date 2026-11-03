@@ -42,6 +42,11 @@ class ANNEgitimYaniti(BaseModel):
     accuracy           : float
     f1                 : float
     roc_auc            : float
+    precision          : Optional[float] = None
+    recall             : Optional[float] = None
+    pr_auc             : Optional[float] = None
+    balanced_accuracy  : Optional[float] = None
+    conf_matrix        : Optional[List[List[int]]] = None
     egitim_suresi      : float
     toplam_epoch       : int
     en_iyi_epoch       : int

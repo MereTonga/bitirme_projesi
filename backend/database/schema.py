@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS modeller (
     accuracy            REAL,
     f1                  REAL,
     roc_auc             REAL,
+    precision           REAL,
+    recall              REAL,
+    pr_auc              REAL,
+    balanced_accuracy   REAL,
 
     -- Preprocessing
     imputer_yontem      TEXT DEFAULT 'median',
@@ -93,6 +97,10 @@ CREATE TABLE IF NOT EXISTS optimizasyon_sonuclari (
 
 # Var olan veritabanlarına sonradan eklenen kolonlar: (tablo, kolon, tip)
 EK_KOLONLAR = [
+    ('modeller', 'precision',         'REAL'),
+    ('modeller', 'recall',            'REAL'),
+    ('modeller', 'pr_auc',            'REAL'),
+    ('modeller', 'balanced_accuracy', 'REAL'),
     ('optimizasyon_sonuclari', 'test_auc', 'REAL'),
     ('optimizasyon_sonuclari', 'cv_fold',  'INTEGER'),
 ]

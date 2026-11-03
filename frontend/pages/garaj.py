@@ -174,7 +174,7 @@ def goster():
         goster_kolonlar = [
             c for c in [
                 'goruntu_adi', 'model_adi', 'model_turu',
-                'accuracy', 'f1', 'roc_auc',
+                'roc_auc', 'pr_auc', 'f1', 'accuracy', 'balanced_accuracy',
                 'egitim_suresi', 'kayit_zamani', 'notlar'
             ] if c in tablo_df.columns
         ]
@@ -186,6 +186,8 @@ def goster():
             'accuracy'     : 'Accuracy',
             'f1'           : 'F1',
             'roc_auc'      : 'ROC-AUC',
+            'pr_auc'       : 'PR-AUC',
+            'balanced_accuracy': 'Bal.Acc',
             'egitim_suresi': 'Süre(s)',
             'kayit_zamani' : 'Kayıt Zamanı',
             'notlar'       : 'Not'
@@ -193,7 +195,7 @@ def goster():
         goster_df = tablo_df[goster_kolonlar].rename(columns=isim_map)
 
         # Sayısal kolonları formatla
-        for col in ['Accuracy', 'F1', 'ROC-AUC']:
+        for col in ['Accuracy', 'F1', 'ROC-AUC', 'PR-AUC', 'Bal.Acc']:
             if col in goster_df.columns:
                 goster_df[col] = pd.to_numeric(
                     goster_df[col], errors='coerce'

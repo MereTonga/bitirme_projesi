@@ -18,6 +18,10 @@ def model_kaydet_db(
     f1                : float,
     roc_auc           : float,
     hiperparametreler : dict,
+    precision         : float = None,
+    recall            : float = None,
+    pr_auc            : float = None,
+    balanced_accuracy : float = None,
     imputer_yontem    : str   = 'median',
     scaler_yontem     : str   = 'robust',
     dengesizlik       : str   = 'smote',
@@ -46,7 +50,8 @@ def model_kaydet_db(
                 imputer_yontem, scaler_yontem, dengesizlik,
                 hiperparametreler, boyut_kb,
                 toplam_epoch, en_iyi_epoch, erken_durduruldu,
-                notlar
+                notlar,
+                precision, recall, pr_auc, balanced_accuracy
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?,
@@ -54,7 +59,8 @@ def model_kaydet_db(
                 ?, ?, ?,
                 ?, ?,
                 ?, ?, ?,
-                ?
+                ?,
+                ?, ?, ?, ?
             )
             ON CONFLICT(dosya_adi) DO UPDATE SET
                 goruntu_adi      = excluded.goruntu_adi,
@@ -62,6 +68,10 @@ def model_kaydet_db(
                 accuracy         = excluded.accuracy,
                 f1               = excluded.f1,
                 roc_auc          = excluded.roc_auc,
+                precision        = excluded.precision,
+                recall           = excluded.recall,
+                pr_auc           = excluded.pr_auc,
+                balanced_accuracy= excluded.balanced_accuracy,
                 hiperparametreler= excluded.hiperparametreler,
                 boyut_kb         = excluded.boyut_kb,
                 toplam_epoch     = excluded.toplam_epoch,
@@ -74,7 +84,8 @@ def model_kaydet_db(
             imputer_yontem, scaler_yontem, dengesizlik,
             hiper_json, boyut_kb,
             toplam_epoch, en_iyi_epoch, int(erken_durduruldu),
-            notlar
+            notlar,
+            precision, recall, pr_auc, balanced_accuracy
         ))
 
         # Eklenen/güncellenen satırın ID'sini al

@@ -405,13 +405,17 @@ def goster():
         st.subheader('📊 Eğitim Sonuçları')
 
         # Metrik kartları
+        def _m(anahtar):
+            v = sonuc.get(anahtar)
+            return f"{v:.4f}" if isinstance(v, (int, float)) else '-'
+
         k1, k2, k3, k4, k5, k6 = st.columns(6)
         with k1:
-            st.metric('🎯 Accuracy',     f"{sonuc['accuracy']:.4f}")
+            st.metric('📈 ROC-AUC',      _m('roc_auc'))
         with k2:
-            st.metric('📊 F1 Score',     f"{sonuc['f1']:.4f}")
+            st.metric('📉 PR-AUC',       _m('pr_auc'))
         with k3:
-            st.metric('📈 ROC-AUC',      f"{sonuc['roc_auc']:.4f}")
+            st.metric('📊 F1 Score',     _m('f1'))
         with k4:
             st.metric('⏱️ Süre',         f"{sonuc['egitim_suresi']:.1f}s")
         with k5:

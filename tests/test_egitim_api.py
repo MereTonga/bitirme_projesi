@@ -30,6 +30,10 @@ def test_senkron_ml_egitim(istemci):
     assert 0.5 < gov['roc_auc'] <= 1.0
     assert gov['hiperparametreler']['max_depth'] == 3
     assert 'cache_hit' not in gov
+    for k in ('precision', 'recall', 'pr_auc', 'balanced_accuracy'):
+        assert 0.0 <= gov[k] <= 1.0
+    satir = next(m for m in istemci.get('/db/modeller').json() if m['dosya_adi'] == gov['dosya_adi'])
+    assert satir['pr_auc'] == gov['pr_auc']            # DB'ye yazıldı
     assert _garajda(istemci, gov['dosya_adi'])          # DB'ye yazıldı
 
 
@@ -56,6 +60,7 @@ def test_senkron_ann_egitim(istemci):
     assert r.status_code == 200, r.text
     gov = r.json()
     assert gov['toplam_epoch'] == 5 and gov['erken_durduruldu'] is False
+    assert gov['pr_auc'] is not None and sum(map(sum, gov['conf_matrix'])) == 656
     assert _garajda(istemci, gov['dosya_adi'])
     # Eğitim geçmişi okunabiliyor
     g = istemci.get(f"/models/{gov['dosya_adi']}/gecmis").json()

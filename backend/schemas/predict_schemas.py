@@ -92,6 +92,10 @@ class GarajModelBilgisi(BaseModel):
     accuracy       : float
     f1             : float
     roc_auc        : float
+    precision      : Optional[float] = None
+    recall         : Optional[float] = None
+    pr_auc         : Optional[float] = None
+    balanced_accuracy: Optional[float] = None
     egitim_suresi  : float
     kayit_zamani   : str
     boyut_kb       : float
