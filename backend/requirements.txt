@@ -1,29 +1,32 @@
 # Backend (FastAPI + ML/DL stack)
-# NOT: torch CUDA wheel'i Dockerfile'da ayri index'ten kuruluyor.
+# Sürümler "proje" conda ortamı (Python 3.11) ile birebir sabitlendi.
+# NOT: torch CUDA wheel'i Dockerfile'da ayrı index'ten kuruluyor:
+#   pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cu130
 
 # API
-fastapi
-uvicorn[standard]
-pydantic
+fastapi==0.115.12
+uvicorn[standard]==0.43.0
+pydantic==2.11.3
 
 # Machine Learning
-scikit-learn
-xgboost
-imbalanced-learn
-lightgbm
+scikit-learn==1.8.0
+xgboost==2.1.4
+lightgbm==4.6.0
+imbalanced-learn==0.14.1
 
 # Data
-pandas
-numpy
+numpy==2.3.5
+pandas==2.3.3
+scipy==1.16.3
 
-# Visualization (egitim grafikleri icin)
-plotly
+# Visualization (eğitim grafikleri için)
+plotly==6.0.1
 
 # Serialization
-joblib
+joblib==1.5.3
 
 # Explainability
-shap
+shap==0.51.0
 
 # Hyperparameter Optimization
-optuna
+optuna==4.8.0

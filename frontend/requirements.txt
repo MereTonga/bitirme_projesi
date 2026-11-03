@@ -1,20 +1,21 @@
 # Frontend (Streamlit UI)
-# Frontend sayfalari (eda.py, preprocessing.py) backend modullerini direkt
-# import ettigi icin sklearn/imblearn/joblib gerekli.
-# PyTorch / XGBoost / LightGBM / SHAP / Optuna gerekmiyor (image kucuk kalir).
+# Sürümler "proje" conda ortamı (Python 3.11) ile birebir sabitlendi.
+# Frontend sayfaları (eda.py, preprocessing.py) backend modüllerini doğrudan
+# import ettiği için sklearn/imblearn gerekli.
+# PyTorch / XGBoost / LightGBM / SHAP / Optuna gerekmiyor (image küçük kalır).
 
 # UI
-streamlit
-requests
+streamlit==1.44.1
+requests==2.32.3
 
 # Data & Visualization
-pandas
-numpy
-plotly
-# pandas Styler.background_gradient ve diger colormap'li stil islemleri icin gerekli
-matplotlib
+numpy==2.3.5
+pandas==2.3.3
+plotly==6.0.1
+# pandas Styler.background_gradient için gerekli
+matplotlib==3.10.8
 
-# Backend modulleri icin (preprocessor, balancer)
-scikit-learn
-imbalanced-learn
-joblib
+# Backend modülleri için (preprocessor, balancer, outlier_analizi)
+scikit-learn==1.8.0
+imbalanced-learn==0.14.1
+joblib==1.5.3
