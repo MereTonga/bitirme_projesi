@@ -25,6 +25,8 @@ def model_kaydet_db(
     imputer_yontem    : str   = 'median',
     scaler_yontem     : str   = 'robust',
     dengesizlik       : str   = 'smote',
+    knn_k             : Optional[int]   = None,
+    test_oran         : Optional[float] = None,
     boyut_kb          : float = 0.0,
     toplam_epoch      : Optional[int] = None,
     en_iyi_epoch      : Optional[int] = None,
@@ -33,7 +35,8 @@ def model_kaydet_db(
 ) -> int:
     """
     Eğitilen modelin metadata'sını veritabanına kaydeder.
-    Aynı dosya adı varsa günceller (UPSERT).
+    Aynı dosya adı varsa kullanıcı notu DIŞINDAKİ tüm alanları günceller
+    (UPSERT) — dosya aynı adla yeniden yazıldıysa DB eski bilgiyi tutmasın.
 
     Döndürür:
         model_id: Eklenen/güncellenen satırın ID'si
@@ -47,7 +50,7 @@ def model_kaydet_db(
                 dosya_adi, goruntu_adi, model_adi, model_turu,
                 kayit_zamani, egitim_suresi,
                 accuracy, f1, roc_auc,
-                imputer_yontem, scaler_yontem, dengesizlik,
+                imputer_yontem, scaler_yontem, dengesizlik, knn_k, test_oran,
                 hiperparametreler, boyut_kb,
                 toplam_epoch, en_iyi_epoch, erken_durduruldu,
                 notlar,
@@ -56,7 +59,7 @@ def model_kaydet_db(
                 ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?,
-                ?, ?, ?,
+                ?, ?, ?, ?, ?,
                 ?, ?,
                 ?, ?, ?,
                 ?,
@@ -64,7 +67,15 @@ def model_kaydet_db(
             )
             ON CONFLICT(dosya_adi) DO UPDATE SET
                 goruntu_adi      = excluded.goruntu_adi,
+                model_adi        = excluded.model_adi,
+                model_turu       = excluded.model_turu,
+                kayit_zamani     = excluded.kayit_zamani,
                 egitim_suresi    = excluded.egitim_suresi,
+                imputer_yontem   = excluded.imputer_yontem,
+                scaler_yontem    = excluded.scaler_yontem,
+                dengesizlik      = excluded.dengesizlik,
+                knn_k            = excluded.knn_k,
+                test_oran        = excluded.test_oran,
                 accuracy         = excluded.accuracy,
                 f1               = excluded.f1,
                 roc_auc          = excluded.roc_auc,
@@ -81,7 +92,7 @@ def model_kaydet_db(
             dosya_adi, goruntu_adi, model_adi, model_turu,
             kayit_zamani, egitim_suresi,
             accuracy, f1, roc_auc,
-            imputer_yontem, scaler_yontem, dengesizlik,
+            imputer_yontem, scaler_yontem, dengesizlik, knn_k, test_oran,
             hiper_json, boyut_kb,
             toplam_epoch, en_iyi_epoch, int(erken_durduruldu),
             notlar,
@@ -141,6 +152,12 @@ def egitim_gecmisi_kaydet_db(model_id: int, gecmis: dict):
 # 3. MODEL SORGULAMA
 # ─────────────────────────────────────────
 
+# ORDER BY'a yalnızca bu kolonlar yazılabilir (SQL enjeksiyonu koruması)
+SIRALANABILIR_KOLONLAR = {
+    'roc_auc', 'accuracy', 'f1', 'precision', 'recall', 'pr_auc',
+    'balanced_accuracy', 'egitim_suresi', 'kayit_zamani', 'boyut_kb', 'id',
+}
+
 def tum_modelleri_getir(
     model_turu   : Optional[str]   = None,
     model_adi    : Optional[str]   = None,
@@ -178,14 +195,24 @@ def tum_modelleri_getir(
         kosullar.append('roc_auc >= ?')
         parametreler.append(min_roc_auc)
 
+    if siralama not in SIRALANABILIR_KOLONLAR:
+        raise ValueError(
+            f"Geçersiz sıralama kolonu: '{siralama}'. "
+            f"Geçerli: {sorted(SIRALANABILIR_KOLONLAR)}"
+        )
+
     where  = 'WHERE ' + ' AND '.join(kosullar) if kosullar else ''
     yon    = 'DESC' if azalan else 'ASC'
-    sinir  = f'LIMIT {limit}' if limit else ''
+    sinir  = ''
+    if limit:
+        sinir = 'LIMIT ?'
+        parametreler.append(int(limit))
 
+    # Kolon adı parametre olarak bağlanamaz → yalnızca beyaz listeden
     sorgu = f'''
         SELECT * FROM modeller
         {where}
-        ORDER BY {siralama} {yon}
+        ORDER BY {siralama} {yon}, id DESC
         {sinir}
     '''
 

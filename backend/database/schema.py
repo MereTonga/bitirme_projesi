@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS modeller (
     imputer_yontem      TEXT DEFAULT 'median',
     scaler_yontem       TEXT DEFAULT 'robust',
     dengesizlik         TEXT DEFAULT 'smote',
+    knn_k               INTEGER,
+    test_oran           REAL,
 
     -- Hiperparametreler (JSON)
     hiperparametreler   TEXT,
@@ -101,6 +103,8 @@ EK_KOLONLAR = [
     ('modeller', 'recall',            'REAL'),
     ('modeller', 'pr_auc',            'REAL'),
     ('modeller', 'balanced_accuracy', 'REAL'),
+    ('modeller', 'knn_k',             'INTEGER'),
+    ('modeller', 'test_oran',         'REAL'),
     ('optimizasyon_sonuclari', 'test_auc', 'REAL'),
     ('optimizasyon_sonuclari', 'cv_fold',  'INTEGER'),
 ]

@@ -139,6 +139,8 @@ def model_kaydet(
         imputer_yontem    = pre.get('imputer', 'median'),
         scaler_yontem     = pre.get('scaler',  'robust'),
         dengesizlik       = pre.get('denge',   'smote'),
+        knn_k             = pre.get('knn_k'),
+        test_oran         = pre.get('test_oran'),
         boyut_kb          = round(boyut_kb, 1)
     )
 

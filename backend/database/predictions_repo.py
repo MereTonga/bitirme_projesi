@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing   import Optional
 from database.connection  import db_baglanti
 from database.models_repo import model_getir_dosya_adi
@@ -214,18 +214,23 @@ def gunluk_tahmin_dagilimi(gun_sayisi: int = 7) -> list[dict]:
     Döndürür:
         [{'tarih': str, 'toplam': int, 'icilir': int, 'icilmez': int}]
     """
+    # tahmin_zamani yerel saatle yazılıyor (_simdi). SQLite'ın DATE('now')
+    # değeri UTC olduğundan sınır Python'da yerel takvimle hesaplanır.
+    # Bugün dahil son N gün: bugün ve önceki N-1 gün.
+    baslangic = (date.today() - timedelta(days=max(int(gun_sayisi), 1) - 1)).isoformat()
+
     with db_baglanti() as cursor:
-        cursor.execute(f'''
+        cursor.execute('''
             SELECT
                 DATE(tahmin_zamani)                 as tarih,
                 COUNT(*)                            as toplam,
-                SUM(CASE WHEN sinif=1 THEN 1 END)  as icilir,
-                SUM(CASE WHEN sinif=0 THEN 1 END)  as icilmez
+                SUM(CASE WHEN sinif=1 THEN 1 ELSE 0 END)  as icilir,
+                SUM(CASE WHEN sinif=0 THEN 1 ELSE 0 END)  as icilmez
             FROM tahminler
-            WHERE tahmin_zamani >= DATE('now', '-{gun_sayisi} days')
+            WHERE tahmin_zamani >= ?
             GROUP BY DATE(tahmin_zamani)
             ORDER BY tarih ASC
-        ''')
+        ''', (baslangic,))
         return [dict(s) for s in cursor.fetchall()]
 
 
