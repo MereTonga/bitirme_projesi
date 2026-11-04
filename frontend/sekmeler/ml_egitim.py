@@ -531,6 +531,12 @@ def goster():
 
         st.divider()
         st.subheader('📊 Eğitim Sonuçları')
+        if sonuc.get('model_adi') != model_adi:
+            st.info(
+                f"ℹ️ Bu sonuçlar önceki eğitilen modele ait "
+                f"(**{MODELLER.get(sonuc.get('model_adi'), sonuc.get('model_adi'))}** — "
+                f"`{sonuc.get('goruntu_adi', '')}`). Seçili model için yeni bir eğitim yapın."
+            )
         metrik_kartlari(sonuc)
         st.divider()
 

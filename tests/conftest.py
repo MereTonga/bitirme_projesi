@@ -14,6 +14,12 @@ os.environ['GARAGE_YOLU'] = os.path.join(_GECICI, 'garage')
 os.environ['DB_YOLU']     = os.path.join(_GECICI, 'db', 'test.db')
 os.makedirs(os.environ['GARAGE_YOLU'], exist_ok=True)
 
+# Frontend testleri (api_client, AppTest) hiçbir zaman çalışan bir backend'e
+# (ör. docker compose ile ayakta olan localhost:8000) bağlanmamalı.
+# api_client API_URL'i import anında okuduğu için burada, tüm test
+# modüllerinden önce erişilemeyen bir porta sabitlenir.
+os.environ['API_URL'] = 'http://127.0.0.1:9'
+
 
 @pytest.fixture(scope='session')
 def veritabani():

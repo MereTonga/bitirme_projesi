@@ -26,9 +26,7 @@ BEKLENEN_SEKMELER = [
 
 @pytest.fixture(scope='module')
 def uygulama():
-    # api_client API_URL'i import anında okur; erişilemeyen port → anında
-    # bağlantı reddi (zaman aşımı beklenmez).
-    os.environ['API_URL'] = 'http://127.0.0.1:9'
+    # API_URL conftest.py'de erişilemeyen porta sabitlendi → anında bağlantı reddi.
     return AppTest.from_file(APP_YOLU, default_timeout=60).run()
 
 
@@ -58,7 +56,6 @@ _OPT_SONUC = {
 
 
 def _opt_uygulamasi(model_adi):
-    os.environ['API_URL'] = 'http://127.0.0.1:9'
     at = AppTest.from_file(APP_YOLU, default_timeout=60)
     at.session_state['son_opt_sonuc'] = {**_OPT_SONUC, 'model_adi': model_adi}
     return at.run()   # varsayılan seçili model: logistic_regression, mod: Optuna
@@ -78,3 +75,27 @@ def test_optuna_sonucu_baska_modelde_gizlenir():
     assert not at.exception
     assert '🧪 Test AUC' not in [m.label for m in at.metric]
     assert any('Son optimizasyon' in c.value for c in at.caption)
+
+
+# ── Eğitim sonucu başka modele aitse not gösterilir ───────────
+
+_ML_SONUC = {
+    'model_adi': 'decision_tree', 'goruntu_adi': 'DT_optuna', 'dosya_adi': 'dt.pkl',
+    'accuracy': 0.6, 'precision': 0.5, 'recall': 0.5, 'f1': 0.5, 'roc_auc': 0.6,
+    'pr_auc': 0.5, 'balanced_accuracy': 0.55, 'egitim_suresi': 0.1,
+    'conf_matrix': [[300, 100], [150, 106]],
+    'hiperparametreler': {'max_depth': 5}, 'uyarilar': [],
+}
+
+
+@pytest.mark.parametrize('egitilen,not_beklenir', [
+    ('decision_tree', True),          # varsayılan seçili model: logistic_regression
+    ('logistic_regression', False),
+])
+def test_onceki_model_sonucu_notu(egitilen, not_beklenir):
+    at = AppTest.from_file(APP_YOLU, default_timeout=60)
+    at.session_state['son_ml_sonuc'] = {**_ML_SONUC, 'model_adi': egitilen}
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    notlar = [i.value for i in at.info if 'önceki eğitilen modele ait' in i.value]
+    assert bool(notlar) == not_beklenir
