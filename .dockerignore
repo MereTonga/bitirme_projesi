@@ -27,8 +27,10 @@ data/
 # Streamlit cache
 .streamlit/cache/
 
-# Notebooks (test scriptleri, container'a gerek yok)
-notebooks/
+# Testler, betikler, dokümanlar (image'a girmez)
+tests/
+scripts/
+docs/
 
 # Git
 .git/

@@ -1,37 +1,40 @@
-# Su Kalitesi Siniflandirma — Docker Compose
-# Iki servis: backend (FastAPI + GPU PyTorch) ve frontend (Streamlit).
-# Volume'lar host dosya sistemiyle eslestirildi:
-#   ./data            -> CSV veri seti (read-only mantikli)
-#   ./database        -> SQLite veritabani (persistent)
-#   ./backend/garage  -> Egitilmis ML/DL modelleri (persistent)
+# Su Kalitesi Sınıflandırma — Docker Compose (temel / teslim)
+#
+#   docker compose up --build          → her makinede çalışır (CPU, GPU gerekmez)
+#
+# Ek dosyalar:
+#   docker-compose.gpu.yml  → PyTorch CUDA wheel'i + NVIDIA GPU rezervasyonu
+#   docker-compose.dev.yml  → kod bind mount'ları, otomatik yeniden yükleme,
+#                             veritabanı ve modeller host klasörlerinde
+#   Birleştirme: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#   (ya da .env içinde COMPOSE_FILE — bkz. .env.example)
+#
+# Kalıcı veri:
+#   ./data           → CSV veri seti (salt okunur, repoda)
+#   su_kalitesi_db   → SQLite veritabanı (named volume)
+#   su_kalitesi_garage → eğitilmiş modeller (named volume)
+#   Named volume'lar her ortamda (Linux, WSL2, Docker Desktop) izin sorunu
+#   olmadan çalışır; içerik `docker compose down` ile silinmez
+#   (`down -v` siler).
 
 services:
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: su-kalitesi-backend:latest
+      args:
+        TORCH_INDEX: cpu
+    image: su-kalitesi-backend:cpu
     container_name: su_kalitesi_backend
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app/backend
-      - ./data:/app/data
-      - ./database:/app/database
-      - ./backend/garage:/app/backend/garage
+      - ./data:/app/data:ro
+      - su_kalitesi_db:/app/database
+      - su_kalitesi_garage:/app/backend/garage
     environment:
-      - PYTHONUNBUFFERED=1
-      # NVIDIA / PyTorch
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - TZ=Europe/Istanbul
     networks:
       - bitirme-net
 
@@ -45,19 +48,21 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      # Frontend EDA sayfasi backend.data_loader uzerinden CSV okuyor
-      - ./frontend:/app/frontend
-      - ./backend:/app/backend
-      - ./data:/app/data
+      # EDA / Preprocessing sekmeleri CSV'yi doğrudan okur
+      - ./data:/app/data:ro
     environment:
-      - PYTHONUNBUFFERED=1
-      # api_client.py bu env var ile backend servisine baglanir
+      - TZ=Europe/Istanbul
+      # api_client.py bu adresle backend servisine bağlanır
       - API_URL=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - bitirme-net
+
+volumes:
+  su_kalitesi_db:
+  su_kalitesi_garage:
 
 networks:
   bitirme-net:

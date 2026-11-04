@@ -1,0 +1,32 @@
+# Geliştirme (temel dosyanın üzerine eklenir):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# - Kod host'tan bind mount edilir: değişiklikler yeniden build gerekmeden
+#   yansır (backend uvicorn --reload, frontend Streamlit runOnSave).
+# - Veritabanı ve modeller named volume yerine host klasörlerinde
+#   (./database, ./backend/garage) — dosyalar doğrudan görülebilir.
+# - Container host kullanıcısıyla çalışır, böylece oluşan dosyalar senin
+#   sahipliğinde olur. UID/GID farklıysa .env'de UID=..., GID=... ver
+#   (WSL2 Ubuntu'da varsayılan 1000).
+#
+# requirements.txt ya da Dockerfile değişince yine --build gerekir.
+
+services:
+  backend:
+    user: "${UID:-1000}:${GID:-1000}"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./backend/garage:/app/backend/garage
+
+  frontend:
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend:ro
+    environment:
+      # Docker bind mount'larında inotify güvenilmez → poll
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true

@@ -1,0 +1,24 @@
+# NVIDIA GPU ile çalıştırma (temel dosyanın üzerine eklenir):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Gereksinim: host'ta NVIDIA sürücüsü + NVIDIA Container Toolkit
+# (Docker Desktop + WSL2'de sürücü yeterli). Kontrol:
+#   docker run --rm --gpus all nvidia/cuda:13.0.0-base-ubuntu22.04 nvidia-smi
+
+services:
+  backend:
+    build:
+      args:
+        TORCH_INDEX: cu130
+    image: su-kalitesi-backend:gpu
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
