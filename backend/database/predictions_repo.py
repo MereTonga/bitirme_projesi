@@ -8,6 +8,36 @@ from database.models_repo import model_getir_dosya_adi
 # 1. TAHMİN KAYDET
 # ─────────────────────────────────────────
 
+_INSERT_TAHMIN = '''
+    INSERT INTO tahminler (
+        model_id, tahmin_zamani,
+        sinif, sinif_adi, olasilik, esik,
+        ph, hardness, solids, chloramines,
+        sulfate, conductivity, organic_carbon,
+        trihalomethanes, turbidity
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+'''
+
+
+def _simdi() -> str:
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _tahmin_satiri(model_id, zaman, sinif, sinif_adi, olasilik, esik, su: dict) -> tuple:
+    return (
+        model_id, zaman,
+        sinif, sinif_adi, olasilik, esik,
+        su.get('ph'), su.get('Hardness'), su.get('Solids'), su.get('Chloramines'),
+        su.get('Sulfate'), su.get('Conductivity'), su.get('Organic_carbon'),
+        su.get('Trihalomethanes'), su.get('Turbidity'),
+    )
+
+
+def _model_id(dosya_adi: str) -> Optional[int]:
+    model = model_getir_dosya_adi(dosya_adi)
+    return model['id'] if model else None
+
+
 def tahmin_kaydet_db(
     dosya_adi       : str,
     sinif           : int,
@@ -17,54 +47,39 @@ def tahmin_kaydet_db(
     su_parametreleri: dict
 ) -> int:
     """
-    Tahmin sonucunu veritabanına kaydeder.
-
-    Parametreler:
-        dosya_adi        : Kullanılan modelin dosya adı
-        sinif            : 0 veya 1
-        sinif_adi        : 'İçilebilir' veya 'İçilemez'
-        olasilik         : [0,1] arası float
-        esik             : Kullanılan karar eşiği
-        su_parametreleri : 9 su özelliği dict'i
+    Tek tahmin sonucunu veritabanına kaydeder.
 
     Döndürür:
         tahmin_id: Eklenen satırın ID'si
     """
-    # Model ID'yi dosya adından bul
-    model = model_getir_dosya_adi(dosya_adi)
-    model_id = model['id'] if model else None
-
-    tahmin_zamani = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+    satir = _tahmin_satiri(
+        _model_id(dosya_adi), _simdi(),
+        sinif, sinif_adi, olasilik, esik, su_parametreleri
+    )
     with db_baglanti() as cursor:
-        cursor.execute('''
-            INSERT INTO tahminler (
-                model_id, tahmin_zamani,
-                sinif, sinif_adi, olasilik, esik,
-                ph, hardness, solids, chloramines,
-                sulfate, conductivity, organic_carbon,
-                trihalomethanes, turbidity
-            ) VALUES (
-                ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?,
-                ?, ?
-            )
-        ''', (
-            model_id, tahmin_zamani,
-            sinif, sinif_adi, olasilik, esik,
-            su_parametreleri.get('ph'),
-            su_parametreleri.get('Hardness'),
-            su_parametreleri.get('Solids'),
-            su_parametreleri.get('Chloramines'),
-            su_parametreleri.get('Sulfate'),
-            su_parametreleri.get('Conductivity'),
-            su_parametreleri.get('Organic_carbon'),
-            su_parametreleri.get('Trihalomethanes'),
-            su_parametreleri.get('Turbidity')
-        ))
+        cursor.execute(_INSERT_TAHMIN, satir)
         return cursor.lastrowid
+
+
+def tahminleri_toplu_kaydet(dosya_adi: str, esik: float, kayitlar: list[dict]) -> int:
+    """
+    Toplu tahmin sonuçlarını TEK transaction'da kaydeder (satır başına
+    bağlantı açmak yerine executemany). Hata olursa hiçbiri yazılmaz.
+
+    kayitlar: [{'sinif', 'sinif_adi', 'olasilik', 'su_parametreleri'}, ...]
+    Döndürür: yazılan satır sayısı
+    """
+    if not kayitlar:
+        return 0
+    model_id, zaman = _model_id(dosya_adi), _simdi()
+    satirlar = [
+        _tahmin_satiri(model_id, zaman, k['sinif'], k['sinif_adi'],
+                       k['olasilik'], esik, k['su_parametreleri'])
+        for k in kayitlar
+    ]
+    with db_baglanti() as cursor:
+        cursor.executemany(_INSERT_TAHMIN, satirlar)
+    return len(satirlar)
 
 
 # ─────────────────────────────────────────

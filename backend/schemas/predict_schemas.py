@@ -8,46 +8,23 @@ from typing   import Optional, Literal, List
 
 class SuParametreleri(BaseModel):
     """
-    Kullanıcının girdiği su kalitesi parametreleri.
-    Her alan için gerçekçi min/max sınırlar tanımlı.
-    Eksik değerler (None) pipeline tarafından doldurulur.
+    Su kalitesi parametreleri.
+
+    Sınırlar FİZİKSEL geçerliliktir (pH 0-14, konsantrasyonlar negatif
+    olamaz). Veri setindeki aralığın dışındaki değerler reddedilmez; tahmin
+    yapılır ve yanıtta ekstrapolasyon uyarısı döner (girdi_kontrol.py).
+    Eksik değerler (None) yalnızca ph, Sulfate ve Trihalomethanes için kabul
+    edilir; modelin pipeline'ı bunları doldurur.
     """
-    ph              : Optional[float] = Field(
-                        default=None, ge=0.0, le=14.0,
-                        description='pH değeri (0-14)'
-                      )
-    Hardness        : float = Field(
-                        ge=47.0, le=324.0,
-                        description='Sertlik (mg/L)'
-                      )
-    Solids          : float = Field(
-                        ge=320.0, le=62000.0,
-                        description='Toplam çözünmüş katı (ppm)'
-                      )
-    Chloramines     : float = Field(
-                        ge=0.3, le=13.2,
-                        description='Kloramit (ppm)'
-                      )
-    Sulfate         : Optional[float] = Field(
-                        default=None, ge=129.0, le=482.0,
-                        description='Sülfat (mg/L)'
-                      )
-    Conductivity    : float = Field(
-                        ge=181.0, le=754.0,
-                        description='İletkenlik (μS/cm)'
-                      )
-    Organic_carbon  : float = Field(
-                        ge=2.2, le=28.3,
-                        description='Organik karbon (ppm)'
-                      )
-    Trihalomethanes : Optional[float] = Field(
-                        default=None, ge=0.7, le=124.0,
-                        description='Trihalometan (μg/L)'
-                      )
-    Turbidity       : float = Field(
-                        ge=1.4, le=6.7,
-                        description='Bulanıklık (NTU)'
-                      )
+    ph              : Optional[float] = Field(default=None, ge=0.0, le=14.0, description='pH (0-14)')
+    Hardness        : float           = Field(ge=0.0, description='Sertlik (mg/L)')
+    Solids          : float           = Field(ge=0.0, description='Toplam çözünmüş katı (ppm)')
+    Chloramines     : float           = Field(ge=0.0, description='Kloramin (ppm)')
+    Sulfate         : Optional[float] = Field(default=None, ge=0.0, description='Sülfat (mg/L)')
+    Conductivity    : float           = Field(ge=0.0, description='İletkenlik (μS/cm)')
+    Organic_carbon  : float           = Field(ge=0.0, description='Organik karbon (ppm)')
+    Trihalomethanes : Optional[float] = Field(default=None, ge=0.0, description='Trihalometan (μg/L)')
+    Turbidity       : float           = Field(ge=0.0, description='Bulanıklık (NTU)')
 
 
 # ─────────────────────────────────────────
@@ -79,6 +56,7 @@ class TahminYaniti(BaseModel):
     goruntu_adi     : str
     esik            : float
     db_kaydedildi   : bool = True   # tahmin geçmişine yazılabildi mi
+    uyarilar        : List[str] = []   # eğitim aralığı dışı değerler (ekstrapolasyon)
 
 
 # ─────────────────────────────────────────
@@ -108,37 +86,37 @@ class GarajModelBilgisi(BaseModel):
 
 class TopluTahminIstek(BaseModel):
     """
-    Toplu tahmin isteği.
-    su_listesi: Her eleman bir SuParametreleri dict'i.
+    Toplu tahmin isteği (en fazla 1000 satır).
+
+    su_listesi elemanları bilerek ham dict: her satır endpoint içinde
+    SuParametreleri ile ayrı ayrı doğrulanır, böylece tek hatalı satır tüm
+    isteği 422 ile düşürmez; satır numarası ve sebebiyle raporlanır.
     """
     dosya_adi   : str
     model_turu  : Literal['ml', 'dl']
-    su_listesi  : List[dict]
-    esik        : float = Field(
-        default=0.5, ge=0.1, le=0.9
-    )
-
-    class Config:
-        # Liste boyutu kontrolü
-        pass
+    su_listesi  : List[dict] = Field(min_length=1, max_length=1000)
+    esik        : float = Field(default=0.5, ge=0.1, le=0.9)
 
 
 class TopluTahminSatir(BaseModel):
     satir_no    : int
-    sinif       : int
+    sinif       : int                 # -1: satır hatalı, tahmin yapılmadı
     sinif_adi   : str
-    olasilik    : float
+    olasilik    : Optional[float] = None
     hata        : Optional[str] = None
+    uyarilar    : List[str] = []
 
 
 class TopluTahminYaniti(BaseModel):
-    toplam          : int
-    basarili        : int
-    hatali          : int
-    icilir_sayi     : int
-    icilmez_sayi    : int
-    icilir_oran     : float
-    model_adi       : str
-    goruntu_adi     : str
-    esik            : float
-    sonuclar        : List[TopluTahminSatir]
+    toplam            : int
+    basarili          : int
+    hatali            : int
+    aralik_disi_satir : int = 0       # en az bir değeri eğitim aralığı dışında olan satır
+    icilir_sayi       : int
+    icilmez_sayi      : int
+    icilir_oran       : float
+    model_adi         : str
+    goruntu_adi       : str
+    esik              : float
+    db_kaydedildi     : bool = True
+    sonuclar          : List[TopluTahminSatir]

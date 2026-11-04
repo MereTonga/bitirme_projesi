@@ -99,3 +99,35 @@ def test_onceki_model_sonucu_notu(egitilen, not_beklenir):
     assert not at.exception, [e.value for e in at.exception]
     notlar = [i.value for i in at.info if 'önceki eğitilen modele ait' in i.value]
     assert bool(notlar) == not_beklenir
+
+
+# ── Garaj tahmin formu: fiziksel sınırlı giriş, aralık uyarısı ───────
+
+_GARAJ_MODEL = {
+    'dosya_adi': 'nb.pkl', 'goruntu_adi': 'NB', 'model_adi': 'naive_bayes', 'model_turu': 'ml',
+    'accuracy': 0.6, 'f1': 0.5, 'roc_auc': 0.6, 'egitim_suresi': 0.1,
+    'kayit_zamani': '2026-11-04 10:00:00', 'boyut_kb': 1.0,
+}
+
+
+def test_garaj_tahmin_formu_aralik_disi_deger_kabul_eder(monkeypatch):
+    import sekmeler.garaj as garaj
+    gonderilen = {}
+
+    def _tahmin(payload):
+        gonderilen.update(payload)
+        return {'sinif': 0, 'sinif_adi': 'İçilemez', 'olasilik': 0.3, 'model_adi': 'naive_bayes',
+                'goruntu_adi': 'NB', 'esik': 0.5, 'db_kaydedildi': True,
+                'uyarilar': ['Solids=70,000 eğitim aralığı dışında (321–61,227); tahmin güvenilirliği düşük.']}
+
+    monkeypatch.setattr(garaj, 'modelleri_listele', lambda *a, **k: [_GARAJ_MODEL])
+    monkeypatch.setattr(garaj, 'tahmin_yap', _tahmin)
+    at = AppTest.from_file(APP_YOLU, default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+
+    at.number_input(key='p_Solids').set_value(70000.0)
+    [b for b in at.button if b.key == 'thn_btn'][0].click()
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert gonderilen['su_parametreleri']['Solids'] == 70000.0
+    assert any('eğitim aralığı dışında' in w.value for w in at.warning)

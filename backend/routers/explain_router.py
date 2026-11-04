@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from typing   import List
 
 from config         import OZELLIK_KOLONLARI
+from schemas.predict_schemas import SuParametreleri
 from garage_manager import model_yukle, pipeline_al
 
 router = APIRouter()
@@ -24,7 +25,7 @@ class AciklamaIstek(BaseModel):
     """Tek örnek SHAP açıklaması isteği. /predict ile aynı su parametreleri."""
     dosya_adi       : str
     model_turu      : str = 'ml'
-    su_parametreleri: dict
+    su_parametreleri: SuParametreleri
     n_background    : int = Field(
         default=100, ge=10, le=500,
         description='KernelExplainer / GradientExplainer için background örnek sayısı'
@@ -123,7 +124,7 @@ def tek_ornek_acikla(istek: AciklamaIstek):
             explainer_olustur, tek_ornek_shap, waterfall_verisi_hazirla, ann_shap,
             yontem_adi
         )
-        X_ornek     = _ornek_donustur(istek.su_parametreleri, pipe)
+        X_ornek     = _ornek_donustur(istek.su_parametreleri.model_dump(), pipe)
         X_train, _  = _egitim_verisi(paket)
         model_adi   = paket['model_adi']
         gor_adi     = paket.get('goruntu_adi', model_adi)

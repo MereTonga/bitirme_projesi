@@ -13,17 +13,36 @@ from api_client import (
 )
 from ui_ortak import RENKLER, OZELLIK_KOLONLARI, egitim_egrisi_goster
 
+# Girdi varsayılanları (veri seti medyanına yakın). Sınırlar fizikseldir:
+# pH 0-14, diğerleri ≥ 0. Eğitim aralığı dışı değerler kabul edilir, backend
+# ekstrapolasyon uyarısı döndürür.
 SU_PARAMETRELERI = {
-    'ph'             : {'min': 0.0,   'max': 14.0,    'default': 7.0,    'step': 0.1},
-    'Hardness'       : {'min': 47.0,  'max': 323.0,   'default': 196.0,  'step': 1.0},
-    'Solids'         : {'min': 321.0, 'max': 61000.0, 'default': 22000.0,'step': 100.0},
-    'Chloramines'    : {'min': 0.4,   'max': 13.1,    'default': 7.1,    'step': 0.1},
-    'Sulfate'        : {'min': 129.0, 'max': 481.0,   'default': 333.0,  'step': 1.0},
-    'Conductivity'   : {'min': 182.0, 'max': 753.0,   'default': 426.0,  'step': 1.0},
-    'Organic_carbon' : {'min': 2.2,   'max': 28.3,    'default': 14.3,   'step': 0.1},
-    'Trihalomethanes': {'min': 0.7,   'max': 124.0,   'default': 66.4,   'step': 0.1},
-    'Turbidity'      : {'min': 1.5,   'max': 6.7,     'default': 4.0,    'step': 0.1},
+    'ph'             : {'default': 7.0,     'step': 0.1},
+    'Hardness'       : {'default': 196.0,   'step': 1.0},
+    'Solids'         : {'default': 22000.0, 'step': 100.0},
+    'Chloramines'    : {'default': 7.1,     'step': 0.1},
+    'Sulfate'        : {'default': 333.0,   'step': 1.0},
+    'Conductivity'   : {'default': 426.0,   'step': 1.0},
+    'Organic_carbon' : {'default': 14.3,    'step': 0.1},
+    'Trihalomethanes': {'default': 66.4,    'step': 0.1},
+    'Turbidity'      : {'default': 4.0,     'step': 0.1},
 }
+
+
+def _su_girdisi(param, ayar):
+    """Fiziksel sınırlı sayı girişi; yardım metninde eğitim aralığı."""
+    from girdi_kontrol import egitim_araliklari
+    alt, ust = egitim_araliklari()[param]
+    return st.number_input(
+        param,
+        min_value = 0.0,
+        max_value = 14.0 if param == 'ph' else None,
+        value     = ayar['default'],
+        step      = ayar['step'],
+        key       = f'p_{param}',
+        help      = f'Eğitim aralığı: {alt:,.2f} – {ust:,.2f}. Dışındaki değerler '
+                    f'kabul edilir ama tahmin güvenilirliği düşer.'
+    )
 
 
 def goster():
@@ -299,23 +318,9 @@ def goster():
                                 degerler[param] = None
                                 st.caption('Pipeline dolduracak')
                             else:
-                                degerler[param] = st.slider(
-                                    param,
-                                    min_value = ayar['min'],
-                                    max_value = ayar['max'],
-                                    value     = ayar['default'],
-                                    step      = ayar['step'],
-                                    key       = f'p_{param}'
-                                )
+                                degerler[param] = _su_girdisi(param, ayar)
                         else:
-                            degerler[param] = st.slider(
-                                param,
-                                min_value = ayar['min'],
-                                max_value = ayar['max'],
-                                value     = ayar['default'],
-                                step      = ayar['step'],
-                                key       = f'p_{param}'
-                            )
+                            degerler[param] = _su_girdisi(param, ayar)
 
             if st.button('🔮 Tahmin Yap', type='primary', key='thn_btn'):
                 with st.spinner('Tahmin yapılıyor...'):
@@ -371,6 +376,8 @@ def goster():
                 )
                 if not sonuc.get('db_kaydedildi', True):
                     st.warning('⚠️ Tahmin yapıldı ancak tahmin geçmişine kaydedilemedi.')
+                for uyari in sonuc.get('uyarilar', []):
+                    st.warning(f'⚠️ {uyari}')
 
                 # SHAP Waterfall
                 st.divider()
@@ -730,7 +737,17 @@ def _toplu_tahmin_sekmesi(tum_modeller):
         st.metric('İçilebilir %', f'%{oran*100:.1f}')
 
     if sonuc.get('hatali', 0) > 0:
-        st.warning(f'⚠️ {sonuc["hatali"]} satırda hata oluştu.')
+        st.warning(
+            f'⚠️ {sonuc["hatali"]} satır doğrulamadan geçemedi ve tahmin edilmedi '
+            f'(sebepler tablodaki "Hata" sütununda).'
+        )
+    if sonuc.get('aralik_disi_satir', 0) > 0:
+        st.info(
+            f'ℹ️ {sonuc["aralik_disi_satir"]} satırda eğitim aralığı dışında değer var; '
+            f'bu satırlar tahmin edildi ancak güvenilirlikleri düşük ("Uyarı" sütunu).'
+        )
+    if not sonuc.get('db_kaydedildi', True):
+        st.warning('⚠️ Tahminler yapıldı ancak tahmin geçmişine kaydedilemedi.')
 
     # Pasta grafik
     gc1, gc2 = st.columns([1, 2])
@@ -776,7 +793,8 @@ def _toplu_tahmin_sekmesi(tum_modeller):
             'Satır No' : s['satir_no'],
             'Tahmin'   : s['sinif_adi'],
             'Olasılık' : s['olasilik'],
-            'Hata'     : s.get('hata', '')
+            'Hata'     : s.get('hata') or '',
+            'Uyarı'    : ' '.join(s.get('uyarilar') or [])
         }
         for s in sonuc_satirlar
     ])

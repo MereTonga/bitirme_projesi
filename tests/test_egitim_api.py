@@ -168,8 +168,49 @@ def test_toplu_tahmin(istemci):
     assert gov['icilir_sayi'] + gov['icilmez_sayi'] == 3
     assert [s['satir_no'] for s in gov['sonuclar']] == [1, 2, 3]
 
-    assert istemci.post('/predict/batch', json={'dosya_adi': m['dosya_adi'],
-                                                'su_listesi': []}).status_code == 400
+    # Boş liste ve 1000+ satır şema düzeyinde reddedilir
+    assert istemci.post('/predict/batch', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                                'su_listesi': []}).status_code == 422
+    assert istemci.post('/predict/batch', json={'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+                                                'su_listesi': [ORNEK_SU] * 1001}).status_code == 422
+
+
+def test_toplu_tahmin_satir_bazli_dogrulama_ve_tek_transaction(istemci):
+    m = _egit(istemci, '/train/ml/naive_bayes', {})
+    once = istemci.get('/db/istatistik').json()['tahmin_sayisi']
+    r = istemci.post('/predict/batch', json={
+        'dosya_adi': m['dosya_adi'], 'model_turu': 'ml',
+        'su_listesi': [
+            ORNEK_SU,
+            {**ORNEK_SU, 'Hardness': None},             # zorunlu alan eksik
+            {**ORNEK_SU, 'ph': 15},                     # fiziksel sınır dışı
+            {**ORNEK_SU, 'Solids': 70000},              # eğitim aralığı dışı → uyarı
+            {**ORNEK_SU, 'ph': None, 'Sulfate': None},  # izinli eksikler → pipeline doldurur
+        ],
+    })
+    assert r.status_code == 200, r.text
+    gov = r.json()
+    assert gov['toplam'] == 5 and gov['basarili'] == 3 and gov['hatali'] == 2
+    assert gov['aralik_disi_satir'] == 1 and gov['db_kaydedildi'] is True
+    satir = {s['satir_no']: s for s in gov['sonuclar']}
+    assert satir[2]['sinif'] == -1 and 'Hardness' in satir[2]['hata']
+    assert satir[3]['sinif'] == -1 and 'ph' in satir[3]['hata'] and '14' in satir[3]['hata']
+    assert satir[4]['sinif'] in (0, 1) and 'Solids' in satir[4]['uyarilar'][0]
+    assert satir[5]['sinif'] in (0, 1) and satir[5]['uyarilar'] == []
+    # Yalnızca geçerli 3 satır yazıldı
+    assert istemci.get('/db/istatistik').json()['tahmin_sayisi'] == once + 3
+
+
+def test_tekli_tahmin_fiziksel_sinir_ve_aralik_uyarisi(istemci):
+    m = _egit(istemci, '/train/ml/naive_bayes', {})
+    istek = {'dosya_adi': m['dosya_adi'], 'model_turu': 'ml'}
+    r = istemci.post('/predict', json={**istek, 'su_parametreleri': {**ORNEK_SU, 'Solids': 70000}})
+    assert r.status_code == 200, r.text
+    assert len(r.json()['uyarilar']) == 1 and 'Solids' in r.json()['uyarilar'][0]
+    r = istemci.post('/predict', json={**istek, 'su_parametreleri': ORNEK_SU})
+    assert r.json()['uyarilar'] == []
+    r = istemci.post('/predict', json={**istek, 'su_parametreleri': {**ORNEK_SU, 'Turbidity': -1}})
+    assert r.status_code == 422
 
 
 def test_ann_tahmin_kendi_pipelineiyla(istemci):
