@@ -46,3 +46,16 @@ TEST_ORAN    = 0.2
 
 # Garage içinde model olmayan sistem dosyaları
 SISTEM_DOSYALARI = {'preprocessing_pipeline.pkl'}
+
+# ── Bilinen kütüphane uyumsuzlukları ──────────────────────────
+# LightGBM 4.6.0 + scikit-learn ≥ 1.6: numpy ile eğitilen LGBMClassifier'a
+# otomatik kolon adları (Column_0 ...) atanıyor; numpy ile her tahminde sklearn
+# "X does not have valid feature names" uyarısı veriyor. Model numpy ile eğitilip
+# numpy ile tahmin yapıyor (ml/lgbm_model.py), sonuçlar doğru — uyarı yanlış alarm.
+# Yalnızca bu mesaj ve yalnızca LGBMClassifier için susturulur.
+import warnings as _warnings
+_warnings.filterwarnings(
+    'ignore',
+    message = r'X does not have valid feature names, but LGBMClassifier was fitted with feature names',
+    category = UserWarning,
+)
