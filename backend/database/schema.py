@@ -1,5 +1,8 @@
+import logging
 import os
 from database.connection import db_baglanti, DB_YOLU
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────
@@ -149,7 +152,7 @@ def veritabani_olustur():
             if kolon not in mevcut:
                 cursor.execute(f'ALTER TABLE {tablo} ADD COLUMN {kolon} {tip}')
 
-    print(f'Veritabanı hazır: {DB_YOLU}')
+    logger.info('Veritabanı hazır: %s', DB_YOLU)
 
 
 def veritabani_istatistik():
@@ -175,5 +178,4 @@ def veritabani_istatistik():
         'tahmin_sayisi' : tahmin_sayisi,
         'gecmis_sayisi' : gecmis_sayisi,
         'boyut_kb'      : round(boyut, 2),
-        'db_yolu'       : DB_YOLU
     }

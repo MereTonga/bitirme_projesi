@@ -1,6 +1,31 @@
-from fastapi import FastAPI
+import logging
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from hatalar import genel_hata_mesaji, hata_kimligi
 from routers import ml_router, dl_router, predict_router, explain_router, optimize_router, async_router
+
+# ── Logging ───────────────────────────────────────────────────
+# Uygulama logları (su_kalitesi.*, routers.*, database.* ...) uvicorn
+# loglarıyla aynı akışa (docker compose logs backend) düşer.
+logging.basicConfig(
+    level   = os.environ.get('LOG_SEVIYESI', 'INFO'),
+    format  = '%(asctime)s %(levelname)-7s %(name)s: %(message)s',
+    datefmt = '%Y-%m-%d %H:%M:%S',
+)
+logger = logging.getLogger('su_kalitesi')
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Başlangıçta veritabanı ve tabloları oluşturur (varsa dokunmaz)."""
+    from database.schema import veritabani_olustur
+    veritabani_olustur()
+    yield
 
 
 app = FastAPI(
@@ -19,8 +44,17 @@ app = FastAPI(
     - **/predict**, **/predict/batch** → Tahmin
     - **/db/**                     → Veritabanı sorguları
     ''',
-    version     = '1.0.0'
+    version     = '1.0.0',
+    lifespan    = lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def beklenmeyen_hata(request: Request, exc: Exception):
+    """Yakalanmamış hatalar: traceback loga, istemciye yalnızca hata kimliği."""
+    kimlik = hata_kimligi()
+    logger.error('[%s] %s %s', kimlik, request.method, request.url.path, exc_info=exc)
+    return JSONResponse(status_code=500, content={'detail': genel_hata_mesaji(kimlik)})
 
 # ─────────────────────────────────────────
 # CORS — Streamlit erişimi için
@@ -32,18 +66,6 @@ app.add_middleware(
     allow_methods     = ['*'],
     allow_headers     = ['*']
 )
-
-# ── Veritabanını başlat ───────────────────────────────────────
-@app.on_event('startup')
-def veritabani_baslat():
-    """
-    Uygulama başlarken veritabanı ve tabloları oluşturur.
-    Zaten varsa dokunmaz.
-    """
-    from database.schema import veritabani_olustur
-    veritabani_olustur()
-    print('Veritabanı hazır.')
-
 
 # ── Router'lar ────────────────────────────────────────────────
 app.include_router(

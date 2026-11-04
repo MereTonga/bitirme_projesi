@@ -10,6 +10,7 @@ burada yaşar. İlerleme bildirimi için isteğe bağlı callback'ler alınır:
     trial_cb(trial_no, auc, params)            sadece optimizasyon
 """
 import importlib
+import os
 import time
 
 import numpy as np
@@ -275,7 +276,7 @@ def ann_egit(istek: ANNIstek, durum_cb=None, epoch_cb=None) -> dict:
         'son_train_loss'   : gecmis['train_loss'][-1],
         'son_val_loss'     : gecmis['val_loss'][-1] if gecmis['val_loss'] else None,
         'hiperparametreler': hiper,
-        'gecmis_dosyasi'   : kayit['gecmis_yol'],
+        'gecmis_dosyasi'   : os.path.basename(kayit['gecmis_yol']),   # iç yol istemciye dönmez
     }
 
 

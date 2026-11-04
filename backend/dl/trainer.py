@@ -1,9 +1,12 @@
 import copy
+import logging
 import torch
 import torch.nn as nn
 from config import RANDOM_STATE
 from dl.ann_model import DinamikANN
 from dl.dataset   import dataloader_olustur
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────
@@ -299,8 +302,8 @@ def model_egit(
                     f" | Val Loss: {gecmis['val_loss'][-1]:.4f}"
                     f" | Val Acc: {gecmis['val_acc'][-1]:.4f}"
                 )
-            print(
-                f"  Epoch [{epoch:>3}/{epochs}] "
+            logger.info(
+                f"Epoch [{epoch:>3}/{epochs}] "
                 f"Train Loss: {train_loss:.4f} "
                 f"Train Acc: {train_acc:.4f}"
                 + val_bilgi
@@ -319,8 +322,8 @@ def model_egit(
         # Early Stopping kontrolü
         if es is not None:
             if es.adim(gecmis['val_loss'][-1], model, epoch):
-                print(
-                    f"\n  ⏹ Early stopping: {epoch}. epoch'ta duruldu."
+                logger.info(
+                    f"Early stopping: {epoch}. epoch'ta duruldu."
                     f" En iyi epoch: {es.en_iyi_epoch}"
                 )
                 gecmis['durduruldu']   = True

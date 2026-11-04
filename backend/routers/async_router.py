@@ -5,7 +5,7 @@ Her endpoint bir job oluşturur, işi FastAPI BackgroundTasks ile
 services/egitim.py'deki aynı fonksiyonlara devreder ve job_id döner.
 Streamlit, GET /jobs/{job_id} ile ilerlemeyi izler.
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from job_store          import store, JobDurum, epoch_ilerleme, trial_ilerleme
 from schemas.ml_schemas import OptimizasyonIstek
@@ -30,7 +30,7 @@ def job_durum_getir(job_id: str):
 
 
 @router.get('/jobs')
-def job_listesi(limit: int = 20):
+def job_listesi(limit: int = Query(20, ge=1, le=100)):
     """Son N job'u listeler."""
     liste = store.job_listele(limit=limit)
     for job in liste:

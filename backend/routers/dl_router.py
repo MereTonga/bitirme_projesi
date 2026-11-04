@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from schemas.dl_schemas import ANNIstek, ANNEgitimYaniti
 from services.egitim    import ann_egit
 
+from hatalar import sunucu_hatasi
 router = APIRouter()
 
 
@@ -23,5 +24,5 @@ def ann_egit_endpoint(istek: ANNIstek):
         return ANNEgitimYaniti(**ann_egit(istek))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'ANN eğitim hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('ANN eğitim hatası')

@@ -8,7 +8,7 @@ olasılığı kullanıcı eşiğiyle sınıfa çevrilir, sonuç veritabanına ya
 import logging
 
 import pandas as pd
-from fastapi  import APIRouter, HTTPException
+from fastapi  import APIRouter, HTTPException, Query
 from typing   import List, Optional
 
 from pydantic import ValidationError
@@ -25,6 +25,7 @@ from garage_manager import (
 from config            import OZELLIK_KOLONLARI
 from dl.egitim_grafigi import gecmis_yukle
 
+from hatalar import sunucu_hatasi
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -44,8 +45,8 @@ def _tahminci_getir(dosya_adi):
         raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Model yükleme hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Model yükleme hatası')
 
 
 # ─────────────────────────────────────────
@@ -59,8 +60,8 @@ def modelleri_listele(model_turu: Optional[str] = None):
     """
     try:
         return [GarajModelBilgisi(**item) for item in garage_listele(model_turu=model_turu)]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Model listeleme hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Model listeleme hatası')
 
 
 # ─────────────────────────────────────────
@@ -73,8 +74,8 @@ def modelleri_karsilastir(model_turu: Optional[str] = None):
     try:
         tablo = karsilastirma_tablosu(model_turu=model_turu)
         return [] if tablo.empty else tablo.to_dict(orient='records')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Karşılaştırma hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Karşılaştırma hatası')
 
 
 # ─────────────────────────────────────────
@@ -88,8 +89,8 @@ def model_detay(dosya_adi: str):
         meta = model_yukle(dosya_adi)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Model yükleme hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Model yükleme hatası')
 
     return {
         'model_adi'         : meta.get('model_adi'),
@@ -115,8 +116,8 @@ def egitim_gecmisi(dosya_adi: str):
         return gecmis_yukle(dosya_adi.replace('.pkl', ''))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f'Eğitim geçmişi bulunamadı: {dosya_adi}')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Geçmiş yükleme hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Geçmiş yükleme hatası')
 
 
 # ─────────────────────────────────────────
@@ -133,8 +134,8 @@ def model_sil_endpoint(dosya_adi: str):
         raise HTTPException(status_code=404, detail=f'Model bulunamadı: {dosya_adi}')
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Silme hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Silme hatası')
 
 
 # ─────────────────────────────────────────
@@ -157,8 +158,8 @@ def tahmin_yap(istek: TahminIstek):
 
     try:
         y_prob = float(olasilik_hesapla(_su_dataframe(istek.su_parametreleri))[0])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Tahmin hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Tahmin hatası')
 
     sinif     = 1 if y_prob >= istek.esik else 0
     sinif_adi = 'İçilebilir' if sinif == 1 else 'İçilemez'
@@ -198,8 +199,8 @@ def tahmin_yap(istek: TahminIstek):
 def db_modelleri_getir(
     model_turu  : Optional[str]   = None,
     model_adi   : Optional[str]   = None,
-    min_roc_auc : Optional[float] = None,
-    limit       : Optional[int]   = None
+    min_roc_auc : Optional[float] = Query(None, ge=0.0, le=1.0),
+    limit       : Optional[int]   = Query(None, ge=1, le=1000)
 ):
     """
     Veritabanından modelleri filtreli getirir.
@@ -218,15 +219,15 @@ def db_modelleri_getir(
             min_roc_auc = min_roc_auc,
             limit       = limit
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 @router.get('/db/tahminler')
 def db_tahminleri_getir(
     model_id: Optional[int] = None,
-    sinif   : Optional[int] = None,
-    limit   : int           = 50
+    sinif   : Optional[int] = Query(None, ge=0, le=1),
+    limit   : int           = Query(50, ge=1, le=1000)
 ):
     """Son tahminleri getirir."""
     try:
@@ -236,8 +237,8 @@ def db_tahminleri_getir(
             sinif    = sinif,
             limit    = limit
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 @router.get('/db/tahmin-istatistik')
@@ -246,18 +247,18 @@ def db_tahmin_istatistik(model_id: Optional[int] = None):
     try:
         from database.predictions_repo import tahmin_istatistikleri
         return tahmin_istatistikleri(model_id=model_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 @router.get('/db/gunluk-dagilim')
-def db_gunluk_dagilim(gun_sayisi: int = 7):
+def db_gunluk_dagilim(gun_sayisi: int = Query(7, ge=1, le=365)):
     """Son N günün tahmin dağılımını döndürür."""
     try:
         from database.predictions_repo import gunluk_tahmin_dagilimi
         return gunluk_tahmin_dagilimi(gun_sayisi=gun_sayisi)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 @router.get('/db/model-istatistik')
@@ -266,8 +267,8 @@ def db_model_istatistik():
     try:
         from database.models_repo import model_istatistikleri
         return model_istatistikleri()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 @router.put('/db/modeller/{dosya_adi}/not')
@@ -281,8 +282,8 @@ def model_notu_guncelle_endpoint(dosya_adi: str, not_metni: str):
         return {'mesaj': 'Not güncellendi.', 'dosya_adi': dosya_adi}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Veritabanı sorgu hatası')
 
 
 
@@ -332,8 +333,7 @@ def toplu_tahmin(istek: TopluTahminIstek):
                 [{k: su[k] for k in OZELLIK_KOLONLARI} for _, su in gecerli]
             ))
         except Exception:
-            logger.exception('Toplu tahmin hatası (%s)', istek.dosya_adi)
-            raise HTTPException(status_code=500, detail='Toplu tahmin sırasında model hatası oluştu.')
+            raise sunucu_hatasi('Toplu tahmin sırasında model hatası')
 
         for (i, su), prob in zip(gecerli, y_prob):
             olasilik  = round(float(prob), 4)

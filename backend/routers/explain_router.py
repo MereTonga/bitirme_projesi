@@ -14,6 +14,7 @@ from config         import OZELLIK_KOLONLARI
 from schemas.predict_schemas import SuParametreleri
 from garage_manager import model_yukle, pipeline_al
 
+from hatalar import sunucu_hatasi
 router = APIRouter()
 
 
@@ -155,8 +156,8 @@ def tek_ornek_acikla(istek: AciklamaIstek):
         )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'SHAP hesaplama hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('SHAP hesaplama hatası')
 
 
 # ─────────────────────────────────────────
@@ -195,5 +196,5 @@ def ozet_acikla(istek: OzetAciklamaIstek):
         )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Özet SHAP hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Özet SHAP hatası')

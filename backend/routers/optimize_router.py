@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from schemas.ml_schemas import OptimizasyonIstek, OptimizasyonYaniti
 from services.egitim    import optimize_et
 
+from hatalar import sunucu_hatasi
 router = APIRouter()
 
 
@@ -19,8 +20,8 @@ def optimize_endpoint(istek: OptimizasyonIstek):
         return OptimizasyonYaniti(**optimize_et(istek))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Optimizasyon hatası: {e}')
+    except Exception:
+        raise sunucu_hatasi('Optimizasyon hatası')
 
 
 @router.get('/optimize/gecmis')
@@ -29,5 +30,5 @@ def optimizasyon_gecmisi(model_adi: str = None):
     from database.optimizasyon_repo import optimizasyon_gecmisi_getir
     try:
         return optimizasyon_gecmisi_getir(model_adi=model_adi)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise sunucu_hatasi('Optimizasyon geçmişi okunamadı')

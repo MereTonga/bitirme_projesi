@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from schemas.ml_schemas import MLEgitimYaniti
 from services.egitim    import MODEL_KAYIT_DEFTERI, ml_egit
 
+from hatalar import sunucu_hatasi
 router = APIRouter()
 
 
@@ -19,8 +20,8 @@ def _endpoint_uret(model_adi, IstekSinifi):
             return MLEgitimYaniti(**ml_egit(model_adi, istek))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f'Eğitim hatası: {e}')
+        except Exception:
+            raise sunucu_hatasi('Eğitim hatası')
 
     endpoint.__name__ = f'{model_adi}_egit'
     endpoint.__doc__  = (
