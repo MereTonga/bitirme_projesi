@@ -224,7 +224,7 @@ Gereksinim: **Docker Desktop** (Windows/macOS; Windows'ta WSL2 backend) ya da
 Linux'ta Docker Engine 24+ ve Docker Compose v2. Python kurmana gerek yok.
 
 ```bash
-git clone <repo-adresi>
+git clone https://github.com/MereTonga/bitirme_projesi.git
 cd bitirme_projesi
 ```
 
