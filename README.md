@@ -1,106 +1,334 @@
-# Su Kalitesi Sınıflandırma Sistemi
+# 💧 Su Kalitesi Sınıflandırma Sistemi
 
-Kaggle su kalitesi veri seti kullanılarak suyun içilebilirliğini tahmin eden
-interaktif bir makine öğrenmesi ve derin öğrenme uygulaması.
+Bir su örneğinin 9 kimyasal ölçümünden **içilebilir olup olmadığını** tahmin eden;
+10 klasik makine öğrenmesi modeli ve bir PyTorch yapay sinir ağını aynı veri
+hazırlama hattıyla eğiten, karşılaştıran, hiperparametrelerini optimize eden ve
+her tahmini SHAP ile açıklayan uçtan uca bir uygulama.
 
-## Teknolojiler
+- **Arayüz:** Streamlit (5 sekme: EDA → Preprocessing → ML → Derin Öğrenme → Model Garajı)
+- **API:** FastAPI (eğitim, tahmin, açıklama, asenkron işler; `/docs` altında Swagger)
+- **Depolama:** SQLite (model metadata, tahmin geçmişi, optimizasyon geçmişi) + model dosyaları
+- **Çalıştırma:** Docker Compose; GPU isteğe bağlı
 
-- **Frontend:** Streamlit
-- **Backend:** FastAPI
-- **Database:** SQLite
-- **ML:** Scikit-learn, XGBoost, LightGBM, Imbalanced-learn
-- **DL:** PyTorch (CUDA destekli)
-- **Hyperparameter Optimization:** Optuna
-- **Explainability:** SHAP
-- **Container:** Docker + Docker Compose (NVIDIA Container Toolkit ile GPU)
+---
+
+## İçindekiler
+
+1. [Veri seti](#veri-seti)
+2. [Yöntem](#yöntem)
+3. [Sonuçlar](#sonuçlar)
+4. [Mimari](#mimari)
+5. [Kurulum ve çalıştırma](#kurulum-ve-çalıştırma)
+6. [Testler](#testler)
+7. [API](#api)
+8. [Dizin yapısı](#dizin-yapısı)
+
+---
+
+## Veri seti
+
+[Kaggle — Water Potability](https://www.kaggle.com/datasets/adityakadiwal/water-potability)
+(`data/water_potability.csv`, repoda).
+
+
+|                 |                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Örnek sayısı | 3 276                                                                                                                  |
+| Özellikler     | `ph`, `Hardness`, `Solids`, `Chloramines`, `Sulfate`, `Conductivity`, `Organic_carbon`, `Trihalomethanes`, `Turbidity` |
+| Hedef           | `Potability` — 0: içilemez (1 998, %61), 1: içilebilir (1 278, %39)                                                 |
+| Eksik değer    | `ph` 491 (%15.0), `Sulfate` 781 (%23.8), `Trihalomethanes` 162 (%4.9)                                                  |
+
+Veri seti zor bir problemdir: özellikler ile hedef arasında güçlü doğrusal ilişki
+yoktur ve sınıflar özellik uzayında büyük ölçüde örtüşür. Bu yüzden en iyi
+modellerin ROC-AUC değerleri bile orta düzeydedir (bkz. [Sonuçlar](#sonuçlar)).
+
+## Yöntem
+
+### Veri sızıntısını önleyen sıra
+
+1. **Önce bölme:** stratified %80 eğitim / %20 test (`random_state=42`). Test seti
+   hiçbir dönüşümün `fit` aşamasına, hiperparametre aramasına ya da erken
+   durdurmaya girmez.
+2. **Ölçekleme → eksik değer doldurma** (`sklearn.Pipeline`, yalnızca eğitim setine
+   `fit`): RobustScaler / StandardScaler / MinMaxScaler; median ya da KNN imputer.
+   Ölçekleme önce gelir, böylece KNN imputer mesafeleri ölçekli uzayda hesaplanır.
+3. **Sınıf dengesizliği** yalnızca eğitim setinde: SMOTE, ya da `class_weight`
+   (XGBoost'ta eşdeğeri `scale_pos_weight`).
+4. Eğitilen her model, kendi pipeline'ı ve preprocessing ayarlarıyla birlikte
+   **tek pakette** saklanır; tahmin ve açıklama her zaman modelin eğitildiği
+   dönüşümle yapılır.
+
+### Eksik veri mekanizması
+
+Tek bir global imputation yönteminin uygun olup olmadığı test edildi:
+
+
+| Test                                                                 | Sonuç                              |
+| ---------------------------------------------------------------------- | ------------------------------------- |
+| Little MCAR testi (EM tahmini)                                       | χ² = 39.04, sd = 51, **p = 0.89** |
+| Her eksik kolon için diğer 8 özellikte Welch t-testi (Bonferroni) | en küçük p ≈ 0.14               |
+| Eksiklik göstergesi ~ Potability (χ²)                             | p = 0.16 / 0.35 / 0.20              |
+
+Hiçbir test MCAR'ı reddetmiyor; veri **MCAR ile tutarlı**. (Bu testler MCAR'ı
+kanıtlamaz, yalnızca reddedemez; MNAR gözlenen veriden test edilemez.) Testler
+arayüzün EDA sekmesinde canlı hesaplanır.
+
+### Modeller
+
+Logistic Regression, Naive Bayes, KNN, Decision Tree, Random Forest, Gradient
+Boosting, XGBoost, LightGBM, AdaBoost, SVM ve **PyTorch ANN** (katman sayısı/genişliği
+ayarlanabilir, BatchNorm, Dropout, early stopping; validation seti SMOTE'tan önce
+eğitim setinden stratified ayrılır, seed sabit).
+
+### Hiperparametre optimizasyonu
+
+Optuna (TPE). Her deneme **eğitim setinde stratified k-fold CV** ile puanlanır;
+imputer, scaler ve SMOTE her fold'un içinde yeniden `fit` edilir. En iyi
+parametreler test setinde yalnızca bir kez ölçülür; arayüz CV skoru ile test
+skorunu yan yana gösterir.
+
+### Değerlendirme
+
+ROC-AUC (ana metrik), PR-AUC, F1, recall, precision, balanced accuracy,
+accuracy, karışıklık matrisi. Dengesiz veri nedeniyle accuracy tek başına
+yanıltıcıdır; azınlık sınıfı için PR-AUC ve recall birlikte okunmalıdır.
+
+### Açıklanabilirlik (SHAP)
+
+Tüm modeller **olasılık uzayında** açıklanır, böylece
+`beklenen değer + Σ SHAP = modelin P(içilebilir) tahmini` olur:
+
+
+| Yöntem                        | Modeller                      | Toplam – tahmin farkı                   |
+| -------------------------------- | ------------------------------- | ------------------------------------------- |
+| TreeExplainer (interventional) | DT, RF, GB, XGBoost, LightGBM | 0 (kesin)                                 |
+| KernelExplainer                | LR, NB, KNN, SVM, AdaBoost    | 0 (verimlilik kısıtı)                  |
+| GradientExplainer              | ANN                           | ≈ 0.02 (örneklemeye dayalı yaklaşık) |
+
+Arayüz her waterfall'ın altında bu doğrulamayı gösterir.
+
+### Girdi doğrulama
+
+API fiziksel olarak imkânsız değerleri reddeder (pH 0–14 dışı, negatif
+konsantrasyon). Eğitim aralığı dışındaki gerçek ölçümler kabul edilir, ancak
+yanıtta **ekstrapolasyon uyarısı** döner (ör. `Solids=70,000 eğitim aralığı dışında`). Toplu tahminde her satır ayrı doğrulanır; hatalı satır isteği düşürmez.
+
+## Sonuçlar
+
+Tüm sayılar `python scripts/sonuc_tablosu.py` ile, geçici bir garaj ve
+veritabanında yeniden üretilebilir (~10 dk; ham çıktı: [`docs/sonuclar.md`](docs/sonuclar.md),
+[`docs/sonuclar.json`](docs/sonuclar.json)).
+
+### Sabit bölmede (random_state = 42) test sonuçları
+
+<!-- SONUCLAR:BASLA -->
+| Model | Ayar | ROC-AUC | PR-AUC | F1 | Recall | Precision | Bal. Acc. | Accuracy | CV AUC ± std |
+|---|---|---|---|---|---|---|---|---|---|
+| Gradient Boosting | Optuna (20 trial) | **0.682** | 0.617 | 0.538 | 0.535 | 0.541 | 0.623 | 0.642 | 0.678 ± 0.021 |
+| Random Forest | Optuna (20 trial) | **0.681** | 0.605 | 0.523 | 0.484 | 0.569 | 0.625 | 0.655 | 0.694 ± 0.017 |
+| Random Forest | varsayılan | **0.675** | 0.592 | 0.524 | 0.469 | 0.594 | 0.632 | 0.668 | — |
+| XGBoost | Optuna (20 trial) | **0.674** | 0.603 | 0.558 | 0.617 | 0.510 | 0.619 | 0.619 | 0.684 ± 0.012 |
+| ANN (PyTorch) | varsayılan (64-32) | **0.673** | 0.603 | 0.544 | 0.562 | 0.527 | 0.620 | 0.633 | — |
+| Gradient Boosting | varsayılan | **0.668** | 0.600 | 0.535 | 0.539 | 0.531 | 0.617 | 0.634 | — |
+| XGBoost | varsayılan | **0.666** | 0.608 | 0.502 | 0.488 | 0.516 | 0.598 | 0.622 | — |
+| LightGBM | Optuna (20 trial) | **0.664** | 0.594 | 0.515 | 0.477 | 0.560 | 0.618 | 0.649 | 0.684 ± 0.018 |
+| LightGBM | varsayılan | **0.659** | 0.590 | 0.528 | 0.508 | 0.551 | 0.621 | 0.646 | — |
+| SVM | varsayılan | **0.654** | 0.568 | 0.523 | 0.535 | 0.511 | 0.604 | 0.619 | — |
+| SVM | Optuna (20 trial) | **0.652** | 0.571 | 0.523 | 0.551 | 0.498 | 0.598 | 0.608 | 0.701 ± 0.018 |
+| AdaBoost | Optuna (20 trial) | **0.628** | 0.542 | 0.492 | 0.484 | 0.500 | 0.587 | 0.610 | 0.667 ± 0.020 |
+| KNN | Optuna (20 trial) | **0.626** | 0.540 | 0.519 | 0.559 | 0.485 | 0.589 | 0.596 | 0.659 ± 0.015 |
+| KNN | varsayılan | **0.617** | 0.494 | 0.477 | 0.492 | 0.463 | 0.564 | 0.579 | — |
+| Naive Bayes | varsayılan | **0.609** | 0.484 | 0.454 | 0.445 | 0.463 | 0.558 | 0.582 | — |
+| Naive Bayes | Optuna (20 trial) | **0.609** | 0.484 | 0.454 | 0.445 | 0.463 | 0.558 | 0.582 | 0.578 ± 0.024 |
+| Decision Tree | Optuna (20 trial) | **0.601** | 0.518 | 0.402 | 0.324 | 0.529 | 0.570 | 0.624 | 0.627 ± 0.022 |
+| Decision Tree | varsayılan | **0.585** | 0.441 | 0.503 | 0.519 | 0.487 | 0.585 | 0.599 | — |
+| AdaBoost | varsayılan | **0.566** | 0.457 | 0.495 | 0.582 | 0.431 | 0.545 | 0.537 | — |
+| Logistic Regression | Optuna (20 trial) | **0.553** | 0.470 | 0.479 | 0.555 | 0.421 | 0.534 | 0.529 | 0.473 ± 0.016 |
+| Logistic Regression | varsayılan | **0.547** | 0.460 | 0.474 | 0.547 | 0.418 | 0.530 | 0.526 | — |
+
+*Üretim: `python scripts/sonuc_tablosu.py` — 2026-11-04. Test seti: %20 stratified (n=656), random_state=42; median imputer, RobustScaler, SMOTE yalnızca eğitim setinde. Test metrikleri tek seferlik; CV AUC Optuna aramasının eğitim setindeki 5-fold ortalamasıdır (test seti aramaya girmez). Sıralama test ROC-AUC'ye göre.*
+
+### Bölme değişkenliği (varsayılan parametreler, 10 farklı stratified bölme)
+
+| Model | Test ROC-AUC ort ± std | min – max |
+|---|---|---|
+| SVM | **0.683** ± 0.016 | 0.659 – 0.706 |
+| Random Forest | **0.680** ± 0.020 | 0.655 – 0.711 |
+| XGBoost | **0.669** ± 0.022 | 0.641 – 0.718 |
+| LightGBM | **0.658** ± 0.019 | 0.624 – 0.689 |
+| Gradient Boosting | **0.645** ± 0.020 | 0.615 – 0.677 |
+| KNN | **0.617** ± 0.021 | 0.594 – 0.666 |
+| Decision Tree | **0.580** ± 0.017 | 0.548 – 0.605 |
+| Naive Bayes | **0.577** ± 0.027 | 0.539 – 0.639 |
+| AdaBoost | **0.557** ± 0.021 | 0.529 – 0.596 |
+| Logistic Regression | **0.497** ± 0.013 | 0.478 – 0.521 |
+
+*Her bölmede aynı preprocessing (median, RobustScaler, SMOTE yalnızca eğitimde), random_state 0…9. ANN bu tabloda yok (GPU/epoch süresi).*
+<!-- SONUCLAR:BITIR -->
+
+### Yorum
+
+- **En iyi grup** ağaç tabanlı topluluklar (Random Forest, XGBoost, LightGBM,
+  Gradient Boosting), RBF çekirdekli SVM ve ANN'dir; test ROC-AUC 0.65–0.68
+  bandındadır. Tek bölmede Gradient Boosting birinci görünse de 10 farklı
+  bölmenin ortalamasında sıralama değişir (SVM 0.683 ± 0.016, Random Forest
+  0.680 ± 0.020). Bölmeler arası standart sapma ≈ 0.02 olduğundan **bu grubun
+  içindeki farklar istatistiksel olarak anlamlı değildir**; tek bir "en iyi
+  model" iddiası yerine "en iyi model ailesi" demek doğrudur.
+- **Optuna'nın kazancı küçüktür** (çoğu modelde test AUC'de ≤ 0.015). Belirgin
+  kazanç yalnızca varsayılanı zayıf olan modellerde görülür: AdaBoost 0.566 →
+  0.628, Decision Tree 0.585 → 0.601. SVM'de CV skoru (0.701) test skorundan
+  (0.652) yüksektir: çok sayıda deneme arasından en iyisini seçmek CV skorunu
+  iyimser yapar; bu yüzden test seti aramaya hiç sokulmaz ve ayrı raporlanır.
+- **Logistic Regression rastgele tahmin düzeyindedir** (10 bölmede 0.497 ±
+  0.013): özellikler ile hedef arasında doğrusal bir ilişki yoktur. Sabit
+  bölmedeki 0.553 (test) ve 0.473 (CV) aynı gürültünün iki yüzüdür; sinyal
+  sıfıra yakın olduğunda bir bölmenin eğitim ve test yarıları birbirinin ters
+  yönüne sapar. Doğrusal olmayan modellerin üstünlüğü bu veri setinin temel
+  bulgusudur.
+- **Pratik anlam:** en iyi modellerde precision ≈ 0.55, recall ≈ 0.5. İçme
+  suyu güvenliği açısından kritik hata, içilemez suya "içilebilir" demektir
+  (yanlış pozitif). Arayüzdeki **karar eşiği** yükseltilerek precision artırılabilir
+  (recall pahasına); bu veri setiyle model tek başına bir güvenlik kararı
+  vermek için yeterli değildir, bir ön eleme aracı olarak düşünülmelidir.
 
 ## Mimari
 
+```mermaid
+flowchart LR
+    K([Kullanıcı]) -->|:8501| F[Streamlit<br/>frontend]
+    F -->|HTTP JSON| B[FastAPI<br/>backend :8000]
+    B --> S[services/egitim.py<br/>ortak eğitim servisi]
+    S --> P[Pipeline<br/>scaler → imputer → SMOTE]
+    S --> M[ML modelleri<br/>sklearn / XGBoost / LightGBM]
+    S --> N[ANN<br/>PyTorch, CPU/GPU]
+    S --> O[Optuna<br/>k-fold CV]
+    B --> X[SHAP<br/>explainer.py]
+    B --> J[(JobStore<br/>asenkron işler)]
+    S --> G[(Garaj<br/>model paketleri .pkl)]
+    B --> D[(SQLite<br/>modeller · tahminler<br/>optimizasyonlar)]
 ```
-+--------------+         +-----------+         +----------+
-|  Streamlit   | <-----> |  FastAPI  | <-----> |  SQLite  |
-|  (frontend)  |  HTTP   | (backend) |   IO    |   (db)   |
-+--------------+         +-----------+         +----------+
-       :8501                  :8000              persist
-```
 
-İki servis ayrı container'larda çalışır, Docker network (`bitirme-net`)
-üzerinden haberleşir. Backend container'ı GPU rezervasyonu ile başlatılır
-ve PyTorch için NVIDIA GPU'ya erişir.
+- Senkron uçlar (`/train/ml/{model}`) ve asenkron uçlar (`/train/ml/async/{model}`)
+  aynı servis fonksiyonunu çağırır; asenkron işler `/jobs/{id}` ile izlenir ve
+  arayüz sayfayı kilitlemeden ilerlemeyi gösterir.
+- Beklenmeyen sunucu hatalarında istemciye yalnızca bir hata kimliği döner;
+  ayrıntı `docker compose logs backend` içindedir.
 
-## Docker ile Çalıştırma (önerilen)
+## Kurulum ve çalıştırma
 
-### Ön gereksinimler
+### Docker ile (önerilen)
 
-- Docker Engine 24+ ve Docker Compose
-- (GPU için) NVIDIA Container Toolkit + WSL2/Linux üzerinde NVIDIA sürücüsü
-- En az ~10 GB boş disk (PyTorch CUDA wheel + cuDNN runtime image büyük)
-
-GPU desteğini doğrulamak için:
+Gereksinim: Docker Engine 24+ (ya da Docker Desktop) ve Docker Compose v2.
+Windows'ta Docker Desktop + WSL2 backend.
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+git clone <repo-adresi> && cd bitirme_projesi
+docker compose up --build
 ```
 
-`nvidia-smi` çıktısı görürseniz hazırsınız.
+- Arayüz: [http://localhost:8501](http://localhost:8501)
+- API dokümantasyonu: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### Build & Up
+Bu komut **her makinede** çalışır: PyTorch'un CPU sürümü kurulur (backend image ~3.6 GB)
+ve GPU gerekmez. Garaj boş başlar; modeller arayüzden eğitilir.
+
+**NVIDIA GPU ile** (host'ta NVIDIA sürücüsü + NVIDIA Container Toolkit; Docker
+Desktop + WSL2'de sürücü yeterli):
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
 
-İlk build PyTorch CUDA wheel'i indirdiği için 5-15 dakika sürebilir.
+CUDA 13.0 wheel'i kurulur (image ~10 GB). Arayüzün sağ üstünde GPU adı görünür.
 
-### Erişim
-
-- **Streamlit UI:** http://localhost:8501
-- **FastAPI Swagger:** http://localhost:8000/docs
-- **Health endpoint:** http://localhost:8000/health
-  (Cevapta `"gpu": true` görmelisiniz.)
-
-### Volume'lar (kalıcı veri)
-
-Aşağıdaki klasörler container restart'larında kalıcıdır:
-
-| Host                     | Container                | İçerik                |
-|--------------------------|--------------------------|-----------------------|
-| `./data/`                | `/app/data/`             | water_potability.csv  |
-| `./database/`            | `/app/database/`         | SQLite veritabanı     |
-| `./backend/garage/`      | `/app/backend/garage/`   | Eğitilmiş modeller    |
-
-### Faydalı komutlar
+**Geliştirme modu** (kod değişiklikleri build gerekmeden yansır, veritabanı ve
+modeller `./database` ve `./backend/garage` klasörlerinde):
 
 ```bash
-# Logları takip et
-docker compose logs -f
-docker compose logs -f backend
-docker compose logs -f frontend
-
-# Durdurma
-docker compose down
-
-# Image'ları da sil (yeniden build için)
-docker compose down --rmi local
-
-# Sadece backend'i yeniden başlat
-docker compose restart backend
+cp .env.example .env        # COMPOSE_FILE: temel + gpu + dev; UID/GID
+docker compose up --build   # .env'deki dosyalar otomatik birleşir
 ```
 
-## Lokal (Docker'sız) Geliştirme
+
+| Durum       | Kalıcı veri                                              | Silmek için             |
+| ------------- | ------------------------------------------------------------ | -------------------------- |
+| Temel / GPU | Docker volume'ları `su_kalitesi_db`, `su_kalitesi_garage` | `docker compose down -v` |
+| Geliştirme | `./database`, `./backend/garage`                           | klasör içeriğini sil  |
+
+Container'lar root olmayan bir kullanıcıyla ve `Europe/Istanbul` saat dilimiyle çalışır.
+
+### Docker olmadan
+
+Python 3.11:
 
 ```bash
-# Backend
-pip install -r backend/requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cu128
-cd backend && uvicorn main:app --reload --port 8000
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.9.1
+pip install -r backend/requirements.txt -r frontend/requirements.txt
 
-# Frontend (ayrı terminal)
-pip install -r frontend/requirements.txt
-cd frontend && streamlit run app.py
+cd backend && uvicorn main:app --port 8000          # 1. terminal
+streamlit run frontend/app.py                        # 2. terminal (proje kökünden)
 ```
 
-Lokal geliştirmede `frontend/api_client.py` varsayılan olarak
-`http://localhost:8000` kullanır. Docker'da bu otomatik olarak
-`http://backend:8000` olarak override edilir (`API_URL` env var).
+## Testler
+
+```bash
+pip install -r requirements-dev.txt
+pytest                      # 68 birim + API + arayüz testi (~20 sn, geçici garaj/DB)
+pytest -m integration       # çalışan docker compose kurulumuna karşı uçtan uca
+```
+
+Kapsam: veri hazırlama sırası ve sızıntı kontrolleri, her model ailesi için
+eğitim/tahmin/SHAP tutarlılığı (`beklenen + Σ SHAP = tahmin`), Optuna CV,
+eksiklik testleri (sentetik MCAR/MAR verisinde doğru karar), girdi doğrulama,
+veritabanı sorguları, hata mesajlarında iç ayrıntı sızmaması ve Streamlit
+arayüzünün başsız (`AppTest`) duman testleri.
+
+## API
+
+Tam şema ve deneme arayüzü: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+
+| Grup         | Uçlar                                                                                                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eğitim      | `POST /train/ml/{model}` · `POST /train/dl/ann`                                                                                                                                             |
+| Asenkron     | `POST /train/ml/async/{model}` · `POST /train/dl/async` · `POST /optimize/async` · `GET /jobs` · `GET /jobs/{id}`                                                                        |
+| Optimizasyon | `POST /optimize` · `GET /optimize/gecmis`                                                                                                                                                   |
+| Tahmin       | `POST /predict` · `POST /predict/batch` (≤ 1000 satır)                                                                                                                                    |
+| Açıklama   | `POST /explain` · `POST /explain/summary`                                                                                                                                                   |
+| Garaj        | `GET /models` · `GET /models/karsilastir` · `GET /models/{dosya}` · `GET /models/{dosya}/gecmis` · `DELETE /models/{dosya}`                                                              |
+| Veritabanı  | `GET /db/modeller` · `GET /db/tahminler` · `GET /db/tahmin-istatistik` · `GET /db/gunluk-dagilim` · `GET /db/model-istatistik` · `GET /db/istatistik` · `PUT /db/modeller/{dosya}/not` |
+| Sağlık     | `GET /` · `GET /health`                                                                                                                                                                     |
+
+`{model}`: `logistic_regression`, `naive_bayes`, `knn`, `decision_tree`,
+`random_forest`, `gradient_boosting`, `xgboost`, `lightgbm`, `adaboost`, `svm`.
+
+## Dizin yapısı
+
+```
+├── backend/
+│   ├── main.py               FastAPI uygulaması, lifespan, hata yönetimi
+│   ├── config.py             yollar ve sabitler (env ile değiştirilebilir)
+│   ├── routers/              ince HTTP katmanı
+│   ├── services/egitim.py    ML / ANN / Optuna eğitim akışı (tek yer)
+│   ├── pipeline_builder.py   split → scaler → imputer → SMOTE
+│   ├── preprocessor.py       eksik veri analizi ve testleri (Little, Welch, χ²)
+│   ├── optimizer.py          Optuna + stratified k-fold CV
+│   ├── explainer.py          SHAP (Tree / Kernel / Gradient)
+│   ├── girdi_kontrol.py      eğitim aralığı ve ekstrapolasyon uyarıları
+│   ├── ml/  dl/              model sınıfları, PyTorch ANN ve eğitim döngüsü
+│   ├── database/             SQLite şema, migration ve sorgular
+│   └── garage_manager.py     model paketlerini kaydet / yükle / sil
+├── frontend/
+│   ├── app.py                Streamlit giriş noktası
+│   ├── api_client.py         backend istemcisi
+│   ├── ui_ortak.py           ortak bileşenler
+│   └── sekmeler/             EDA, preprocessing, ML, DL, garaj, iş takibi, SHAP grafikleri
+├── tests/                    pytest (birim, API, arayüz) + integration/
+├── scripts/sonuc_tablosu.py  README sonuç tablosunu üretir
+├── docs/sonuclar.md          üretilmiş sonuç tablosu (+ .json)
+├── data/water_potability.csv
+├── docker-compose.yml        temel (CPU)
+├── docker-compose.gpu.yml    GPU eki
+└── docker-compose.dev.yml    geliştirme eki
+```

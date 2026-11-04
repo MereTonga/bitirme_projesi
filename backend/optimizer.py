@@ -221,7 +221,7 @@ CLASS_WEIGHT_DESTEKLEYEN = {'logistic_regression', 'decision_tree', 'random_fore
 
 def _tam_pipeline(model_adi, params, preprocessing_ayar):
     """
-    imputer → scaler → (SMOTE) → model zincirini imblearn Pipeline olarak kurar.
+    scaler → imputer → (SMOTE) → model zincirini imblearn Pipeline olarak kurar.
     Her CV fold'unda sadece o fold'un train kısmına fit edilir; böylece
     ölçekleme, eksik doldurma ve sentetik örnekler validation'a sızmaz.
     """
