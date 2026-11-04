@@ -217,46 +217,83 @@ flowchart LR
 
 ## Kurulum ve çalıştırma
 
-### Docker ile (önerilen)
-
-Gereksinim: Docker Engine 24+ (ya da Docker Desktop) ve Docker Compose v2.
-Windows'ta Docker Desktop + WSL2 backend.
+Gereksinim: **Docker Desktop** (Windows/macOS; Windows'ta WSL2 backend) ya da
+Linux'ta Docker Engine 24+ ve Docker Compose v2. Python kurmana gerek yok.
 
 ```bash
-git clone <repo-adresi> && cd bitirme_projesi
-docker compose up --build
+git clone <repo-adresi>
+cd bitirme_projesi
 ```
 
-- Arayüz: [http://localhost:8501](http://localhost:8501)
-- API dokümantasyonu: [http://localhost:8000/docs](http://localhost:8000/docs)
+Sonra makinene uyan **tek satırı** çalıştır:
 
-Bu komut **her makinede** çalışır: PyTorch'un CPU sürümü kurulur (backend image ~3.6 GB)
-ve GPU gerekmez. Garaj boş başlar; modeller arayüzden eğitilir.
+| Makinen | Komut | İlk kurulum |
+|---|---|---|
+| **NVIDIA ekran kartı yok** (ya da emin değilsin) | `docker compose up --build` | ~3.6 GB indirme |
+| **NVIDIA ekran kartı var** | `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build` | ~10 GB indirme (CUDA) |
 
-**NVIDIA GPU ile** (host'ta NVIDIA sürücüsü + NVIDIA Container Toolkit; Docker
-Desktop + WSL2'de sürücü yeterli):
+İlk çalıştırma indirme nedeniyle birkaç dakika sürer; sonrakiler saniyeler.
+Terminalde backend ve frontend logları akmaya başlayınca:
+
+- **Arayüz:** <http://localhost:8501>
+- **API dokümantasyonu:** <http://localhost:8000/docs>
+
+Arayüzün sağ üst köşesi hangi donanımda çalıştığını gösterir: `🎮 <GPU adı>` ya
+da `💻 CPU`. Garaj (eğitilmiş modeller) boş başlar; modeller arayüzden eğitilir.
+
+> **GPU komutu hata verirse** (`could not select device driver "nvidia"`):
+> Docker GPU'yu göremiyor demektir. Windows'ta güncel NVIDIA sürücüsü + Docker
+> Desktop (WSL2) yeterlidir; Linux'ta ayrıca
+> [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+> gerekir. Kontrol: `docker run --rm --gpus all ubuntu nvidia-smi` ekran
+> kartını listelemeli. Olmuyorsa CPU komutunu kullan: her şey çalışır, yalnızca
+> ANN eğitimi daha yavaştır (bu veri setinde birkaç saniye fark).
+
+### Durdurma, yeniden başlatma, sıfırlama
+
+| İstediğin | Komut |
+|---|---|
+| Arka planda başlat (terminali bırak) | komutun sonuna ` -d` ekle |
+| Durdur (modeller ve veritabanı kalır) | `docker compose down` |
+| Tekrar başlat | aynı `up` komutu (`--build` yalnızca kod/bağımlılık değişince gerekir) |
+| Logları gör | `docker compose logs -f backend` |
+| **Her şeyi sıfırla** (modeller ve tahmin geçmişi silinir) | `docker compose down -v` |
+
+GPU kullanıyorsan `down` komutlarında da aynı `-f ... -f ...` kısmını yaz
+(ya da aşağıdaki `.env` yöntemini kullan).
+
+### Ne nerede çalışıyor?
+
+İki container vardır: **backend** (FastAPI + modeller, port 8000) ve
+**frontend** (Streamlit, port 8501). Eğitilmiş modeller ve veritabanı Docker'ın
+yönettiği iki kalıcı alanda (`su_kalitesi_garage`, `su_kalitesi_db`) tutulur;
+container'lar silinip yeniden oluşturulsa da kaybolmaz, yalnızca `down -v`
+siler. Container'lar root olmayan bir kullanıcıyla ve İstanbul saatiyle çalışır.
+
+Compose dosyaları katman gibi üst üste eklenir:
+
+| Dosya | Ne ekler |
+|---|---|
+| `docker-compose.yml` | Temel kurulum: CPU, her makinede çalışır |
+| `docker-compose.gpu.yml` | PyTorch'un CUDA sürümü + ekran kartı erişimi |
+| `docker-compose.dev.yml` | Geliştirme: kod değişiklikleri anında yansır, modeller ve veritabanı proje klasöründe (`./backend/garage`, `./database`) görünür |
+
+### Projede geliştirme yapıyorsan
+
+Uzun komutları her seferinde yazmamak için hangi katmanların kullanılacağını
+bir kez `.env` dosyasına yaz (git'e girmez):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+cp .env.example .env     # varsayılan içerik: temel + GPU + geliştirme
+                         # GPU yoksa .env'deki COMPOSE_FILE satırından
+                         # ":docker-compose.gpu.yml" kısmını sil
+docker compose up -d --build
 ```
 
-CUDA 13.0 wheel'i kurulur (image ~10 GB). Arayüzün sağ üstünde GPU adı görünür.
-
-**Geliştirme modu** (kod değişiklikleri build gerekmeden yansır, veritabanı ve
-modeller `./database` ve `./backend/garage` klasörlerinde):
-
-```bash
-cp .env.example .env        # COMPOSE_FILE: temel + gpu + dev; UID/GID
-docker compose up --build   # .env'deki dosyalar otomatik birleşir
-```
-
-
-| Durum       | Kalıcı veri                                              | Silmek için             |
-| ------------- | ------------------------------------------------------------ | -------------------------- |
-| Temel / GPU | Docker volume'ları `su_kalitesi_db`, `su_kalitesi_garage` | `docker compose down -v` |
-| Geliştirme | `./database`, `./backend/garage`                           | klasör içeriğini sil  |
-
-Container'lar root olmayan bir kullanıcıyla ve `Europe/Istanbul` saat dilimiyle çalışır.
+Bundan sonra her yerde kısa komutlar yeterli: `docker compose up -d`,
+`docker compose down`, `docker compose logs -f backend`. Kod değişikliği
+için yeniden build gerekmez (backend ve frontend kendini yeniler); yalnızca
+`requirements.txt` ya da `Dockerfile` değişince `--build` ekle.
 
 ### Docker olmadan
 
