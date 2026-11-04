@@ -1,1 +1,1 @@
-from routers import ml_router, dl_router, predict_router
+"""API router'ları. main.py her birini doğrudan import eder (from routers import ...)."""

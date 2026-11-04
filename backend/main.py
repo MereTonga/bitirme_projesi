@@ -57,12 +57,16 @@ async def beklenmeyen_hata(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={'detail': genel_hata_mesaji(kimlik)})
 
 # ─────────────────────────────────────────
-# CORS — Streamlit erişimi için
+# CORS
+# Streamlit backend'e sunucu tarafından (requests) bağlanır; CORS yalnızca
+# tarayıcıdan doğrudan yapılan çağrılar için geçerli. API kimlik doğrulama
+# kullanmadığı için çerez/kimlik bilgisi taşınmaz: '*' ile credentials=True
+# birlikte her siteye kimlikli erişim izni anlamına gelirdi.
 # ─────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins     = ['*'],
-    allow_credentials = True,
+    allow_credentials = False,
     allow_methods     = ['*'],
     allow_headers     = ['*']
 )
