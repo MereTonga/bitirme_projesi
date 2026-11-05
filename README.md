@@ -11,13 +11,17 @@ her tahmini SHAP ile açıklayan uçtan uca bir uygulama.
 - **Çalıştırma:** Docker Compose; GPU isteğe bağlı
 
 <p align="center">
-  <a href="docs/tanitim.mp4"><img src="docs/tanitim_onizleme.gif" width="880"
-     alt="Uygulama önizlemesi: Optuna araması, ANN eğitimi, model garajı ve SHAP açıklaması"></a>
+  <a href="docs/tanitim_animasyon.mp4"><img src="docs/tanitim_animasyon_onizleme.gif" width="880"
+     alt="Tanıtım animasyonu: su damlası, dokuz ölçüm, önce bölme, on bir model ve SHAP açıklaması"></a>
 </p>
 
-🎬 **Tam tanıtım videosu (2 dk):** [`docs/tanitim.mp4`](docs/tanitim.mp4) — EDA, eksik veri
-testleri, Optuna, ANN (GPU), model garajı ve SHAP açıklaması uçtan uca. Yukarıdaki
-önizleme bu videodan kesitlerdir (2× hızlı).
+🎬 **Tanıtım animasyonu (30 sn, sesli):** [`docs/tanitim_animasyon.mp4`](docs/tanitim_animasyon.mp4) —
+veri hattı bir boru hattı olarak: dokuz ölçüm, önce bölme, on bir model ve SHAP açıklaması.
+Yukarıdaki önizleme bu videonun sessiz GIF hâlidir.
+
+🖥️ **Uygulama demosu (2 dk):** [`docs/tanitim.mp4`](docs/tanitim.mp4) — EDA, eksik veri
+testleri, Optuna, ANN (GPU), model garajı ve SHAP açıklaması gerçek arayüzde uçtan uca
+(önizlemesi: [`docs/tanitim_onizleme.gif`](docs/tanitim_onizleme.gif)).
 
 ---
 
@@ -372,10 +376,12 @@ Tam şema ve deneme arayüzü: [http://localhost:8000/docs](http://localhost:800
 │   └── sekmeler/             EDA, preprocessing, ML, DL, garaj, iş takibi, SHAP grafikleri
 ├── tests/                    pytest (birim, API, arayüz) + integration/
 ├── scripts/sonuc_tablosu.py  README sonuç tablosunu üretir
-├── scripts/demo_video.sh     tanıtım videosunu otomatik kaydeder (izole kopya, Playwright)
+├── scripts/demo_video.sh     uygulama demosunu otomatik kaydeder (izole kopya, Playwright)
 ├── docs/sonuclar.md          üretilmiş sonuç tablosu (+ .json)
-├── docs/tanitim.mp4          tanıtım videosu
-├── docs/tanitim_onizleme.gif README önizlemesi (videodan kesitler)
+├── docs/tanitim_animasyon.mp4          tanıtım animasyonu (30 sn)
+├── docs/tanitim_animasyon_onizleme.gif README önizlemesi (animasyonun GIF hâli)
+├── docs/tanitim.mp4          uygulama demosu (2 dk, ekran kaydı)
+├── docs/tanitim_onizleme.gif uygulama demosunun önizlemesi (videodan kesitler)
 ├── data/water_potability.csv
 ├── docker-compose.yml        temel (CPU)
 ├── docker-compose.gpu.yml    GPU eki
