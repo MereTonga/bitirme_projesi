@@ -10,8 +10,14 @@ her tahmini SHAP ile açıklayan uçtan uca bir uygulama.
 - **Depolama:** SQLite (model metadata, tahmin geçmişi, optimizasyon geçmişi) + model dosyaları
 - **Çalıştırma:** Docker Compose; GPU isteğe bağlı
 
-🎬 **Tanıtım videosu (2 dk):** [`docs/tanitim.mp4`](docs/tanitim.mp4) — EDA, eksik veri
-testleri, Optuna, ANN (GPU), model garajı ve SHAP açıklaması uçtan uca.
+<p align="center">
+  <a href="docs/tanitim.mp4"><img src="docs/tanitim_onizleme.gif" width="880"
+     alt="Uygulama önizlemesi: Optuna araması, ANN eğitimi, model garajı ve SHAP açıklaması"></a>
+</p>
+
+🎬 **Tam tanıtım videosu (2 dk):** [`docs/tanitim.mp4`](docs/tanitim.mp4) — EDA, eksik veri
+testleri, Optuna, ANN (GPU), model garajı ve SHAP açıklaması uçtan uca. Yukarıdaki
+önizleme bu videodan kesitlerdir (2× hızlı).
 
 ---
 
@@ -369,6 +375,7 @@ Tam şema ve deneme arayüzü: [http://localhost:8000/docs](http://localhost:800
 ├── scripts/demo_video.sh     tanıtım videosunu otomatik kaydeder (izole kopya, Playwright)
 ├── docs/sonuclar.md          üretilmiş sonuç tablosu (+ .json)
 ├── docs/tanitim.mp4          tanıtım videosu
+├── docs/tanitim_onizleme.gif README önizlemesi (videodan kesitler)
 ├── data/water_potability.csv
 ├── docker-compose.yml        temel (CPU)
 ├── docker-compose.gpu.yml    GPU eki
